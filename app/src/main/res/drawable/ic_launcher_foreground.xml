@@ -5,51 +5,52 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Pink blob top right -->
+    <!-- Pink blob - top right -->
     <path
         android:fillColor="#FFFF2D6A"
-        android:pathData="M78,18 Q98,15 95,38 Q100,58 80,52 Q62,60 58,40 Q55,20 78,18 Z"/>
+        android:pathData="M75,10 Q102,5 100,35 Q105,60 78,55 Q58,62 55,38 Q52,15 75,10 Z"/>
 
-    <!-- Purple blob left -->
+    <!-- Purple blob - left -->
     <path
         android:fillColor="#FF7B2DFF"
-        android:pathData="M15,42 Q2,38 10,58 Q5,80 28,75 Q48,82 50,60 Q52,42 35,38 Q22,35 15,42 Z"/>
+        android:pathData="M8,38 Q-8,32 5,58 Q-2,82 25,78 Q50,88 52,62 Q55,40 32,35 Q18,30 8,38 Z"/>
 
-    <!-- Yellow blob bottom right -->
+    <!-- Yellow blob - bottom right -->
     <path
         android:fillColor="#FFFFB830"
-        android:pathData="M72,70 Q92,66 95,85 Q98,100 78,96 Q60,102 55,85 Q52,72 72,70 Z"/>
+        android:pathData="M70,72 Q95,68 98,88 Q102,105 78,100 Q58,108 52,88 Q48,74 70,72 Z"/>
 
-    <!-- Cyan blob bottom left -->
+    <!-- Cyan blob - bottom left -->
     <path
         android:fillColor="#FF00D9FF"
-        android:pathData="M22,82 Q8,78 12,95 Q16,108 35,100 Q52,104 48,88 Q45,76 22,82 Z"/>
+        android:pathData="M18,85 Q2,80 8,98 Q14,112 35,105 Q55,110 50,92 Q46,78 18,85 Z"/>
 
-    <!-- Center circle with icon -->
+    <!-- Center white circle - main icon area -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M54,54 m-20,0 a20,20 0 1,1 40,0 a20,20 0 1,1 -40,0"/>
+        android:pathData="M54,54 m-24,0 a24,24 0 1,1 48,0 a24,24 0 1,1 -48,0"/>
 
-    <!-- Left person head -->
+    <!-- Split symbol - clean dollar sign with split line -->
+    <!-- Vertical line -->
     <path
         android:fillColor="#FF7B2DFF"
-        android:pathData="M44,48 m-5,0 a5,5 0 1,1 10,0 a5,5 0 1,1 -10,0"/>
-    <!-- Left person body -->
-    <path
-        android:fillColor="#FF7B2DFF"
-        android:pathData="M39,58 Q39,54 44,54 Q49,54 49,58 L49,66 L39,66 Z"/>
+        android:pathData="M54,38 L54,70"
+        android:strokeWidth="3"
+        android:strokeColor="#FF7B2DFF"/>
 
-    <!-- Right person head -->
+    <!-- S curve of dollar sign -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeWidth="4"
+        android:strokeColor="#FF7B2DFF"
+        android:strokeLineCap="round"
+        android:pathData="M62,44 Q62,40 54,40 Q46,40 46,46 Q46,52 54,54 Q62,56 62,62 Q62,68 54,68 Q46,68 46,64"/>
+
+    <!-- Two dots representing split/share -->
     <path
         android:fillColor="#FFFF2D6A"
-        android:pathData="M64,48 m-5,0 a5,5 0 1,1 10,0 a5,5 0 1,1 -10,0"/>
-    <!-- Right person body -->
-    <path
-        android:fillColor="#FFFF2D6A"
-        android:pathData="M59,58 Q59,54 64,54 Q69,54 69,58 L69,66 L59,66 Z"/>
-
-    <!-- Split line connecting them -->
+        android:pathData="M40,54 m-4,0 a4,4 0 1,1 8,0 a4,4 0 1,1 -8,0"/>
     <path
         android:fillColor="#FF00D9FF"
-        android:pathData="M51,54 L57,54 L57,56 L51,56 Z"/>
+        android:pathData="M68,54 m-4,0 a4,4 0 1,1 8,0 a4,4 0 1,1 -8,0"/>
 </vector>

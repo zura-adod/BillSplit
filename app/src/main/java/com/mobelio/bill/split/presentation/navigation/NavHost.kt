@@ -20,33 +20,36 @@ fun BillSplitNavHost(
     NavHost(
         navController = navController,
         startDestination = Screen.HOME,
-        modifier = modifier,
-        enterTransition = {
-            slideInHorizontally(
-                initialOffsetX = { 300 },
-                animationSpec = tween(400, easing = EaseOutCubic)
-            ) + fadeIn(animationSpec = tween(400))
-        },
-        exitTransition = {
-            slideOutHorizontally(
-                targetOffsetX = { -300 },
-                animationSpec = tween(400, easing = EaseInCubic)
-            ) + fadeOut(animationSpec = tween(400))
-        },
-        popEnterTransition = {
-            slideInHorizontally(
-                initialOffsetX = { -300 },
-                animationSpec = tween(400, easing = EaseOutCubic)
-            ) + fadeIn(animationSpec = tween(400))
-        },
-        popExitTransition = {
-            slideOutHorizontally(
-                targetOffsetX = { 300 },
-                animationSpec = tween(400, easing = EaseInCubic)
-            ) + fadeOut(animationSpec = tween(400))
-        }
+        modifier = modifier
     ) {
-        composable(Screen.HOME) {
+        // Home screen with special vertical transition
+        composable(
+            route = Screen.HOME,
+            enterTransition = {
+                fadeIn(animationSpec = tween(400)) +
+                slideInVertically(
+                    initialOffsetY = { it },
+                    animationSpec = tween(500, easing = EaseOutCubic)
+                )
+            },
+            exitTransition = {
+                fadeOut(animationSpec = tween(300)) +
+                slideOutVertically(
+                    targetOffsetY = { -it / 2 },
+                    animationSpec = tween(400, easing = EaseInCubic)
+                )
+            },
+            popEnterTransition = {
+                fadeIn(animationSpec = tween(400)) +
+                slideInVertically(
+                    initialOffsetY = { -it / 2 },
+                    animationSpec = tween(500, easing = EaseOutCubic)
+                )
+            },
+            popExitTransition = {
+                fadeOut(animationSpec = tween(300))
+            }
+        ) {
             HomeScreen(
                 onCreateSplit = {
                     navController.navigate(Screen.CREATE_SPLIT)
@@ -57,7 +60,38 @@ fun BillSplitNavHost(
             )
         }
 
-        composable(Screen.CREATE_SPLIT) {
+        // Create split screen - slides up from bottom
+        composable(
+            route = Screen.CREATE_SPLIT,
+            enterTransition = {
+                fadeIn(animationSpec = tween(400, delayMillis = 100)) +
+                slideInVertically(
+                    initialOffsetY = { it },
+                    animationSpec = tween(500, easing = EaseOutCubic)
+                )
+            },
+            exitTransition = {
+                fadeOut(animationSpec = tween(250)) +
+                slideOutHorizontally(
+                    targetOffsetX = { -it / 3 },
+                    animationSpec = tween(350, easing = EaseInCubic)
+                )
+            },
+            popEnterTransition = {
+                fadeIn(animationSpec = tween(350)) +
+                slideInHorizontally(
+                    initialOffsetX = { -it / 3 },
+                    animationSpec = tween(400, easing = EaseOutCubic)
+                )
+            },
+            popExitTransition = {
+                fadeOut(animationSpec = tween(300)) +
+                slideOutVertically(
+                    targetOffsetY = { it },
+                    animationSpec = tween(400, easing = EaseInCubic)
+                )
+            }
+        ) {
             CreateSplitScreen(
                 onNavigateBack = {
                     navController.popBackStack()
@@ -71,7 +105,38 @@ fun BillSplitNavHost(
             )
         }
 
-        composable(Screen.REVIEW_SHARE) {
+        // Review share screen - horizontal slide
+        composable(
+            route = Screen.REVIEW_SHARE,
+            enterTransition = {
+                fadeIn(animationSpec = tween(350)) +
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(450, easing = EaseOutCubic)
+                )
+            },
+            exitTransition = {
+                fadeOut(animationSpec = tween(250)) +
+                scaleOut(
+                    targetScale = 0.92f,
+                    animationSpec = tween(300)
+                )
+            },
+            popEnterTransition = {
+                fadeIn(animationSpec = tween(300)) +
+                scaleIn(
+                    initialScale = 0.92f,
+                    animationSpec = tween(350)
+                )
+            },
+            popExitTransition = {
+                fadeOut(animationSpec = tween(300)) +
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(400, easing = EaseInCubic)
+                )
+            }
+        ) {
             ReviewShareScreen(
                 onNavigateBack = {
                     navController.popBackStack()
@@ -82,7 +147,30 @@ fun BillSplitNavHost(
             )
         }
 
-        composable(Screen.CONTACT_PICKER) {
+        // Contact picker - slides up as modal
+        composable(
+            route = Screen.CONTACT_PICKER,
+            enterTransition = {
+                fadeIn(animationSpec = tween(300)) +
+                slideInVertically(
+                    initialOffsetY = { it },
+                    animationSpec = tween(400, easing = EaseOutCubic)
+                )
+            },
+            exitTransition = {
+                fadeOut(animationSpec = tween(200))
+            },
+            popEnterTransition = {
+                fadeIn(animationSpec = tween(200))
+            },
+            popExitTransition = {
+                fadeOut(animationSpec = tween(250)) +
+                slideOutVertically(
+                    targetOffsetY = { it },
+                    animationSpec = tween(350, easing = EaseInCubic)
+                )
+            }
+        ) {
             ContactPickerScreen(
                 onNavigateBack = {
                     navController.popBackStack()
@@ -94,4 +182,3 @@ fun BillSplitNavHost(
         }
     }
 }
-

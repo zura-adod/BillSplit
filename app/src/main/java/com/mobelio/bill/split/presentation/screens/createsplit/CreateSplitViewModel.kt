@@ -211,11 +211,35 @@ class CreateSplitViewModel @Inject constructor(
      */
     fun refreshParticipantsFromStateHolder() {
         val currentSplit = billSplitStateHolder.getCurrentSplit()
-        _state.update { it.copy(participants = currentSplit.participants) }
+        val requiredRecipients = _state.value.numberOfPeople
+
+        // Limit participants to required number
+        val limitedParticipants = currentSplit.participants.take(requiredRecipients)
+
+        // If we had to trim, show a message
+        if (currentSplit.participants.size > requiredRecipients) {
+            viewModelScope.launch {
+                _effects.send(CreateSplitEffect.ShowToast("Only first $requiredRecipients contacts were added"))
+            }
+            // Update state holder with limited list
+            billSplitStateHolder.updateParticipants(limitedParticipants)
+        }
+
+        _state.update { it.copy(participants = limitedParticipants) }
         recalculateSplit()
     }
 
     private fun addPhoneParticipant(phone: String, name: String) {
+        // Check if we already have enough participants
+        val requiredRecipients = _state.value.numberOfPeople
+        if (_state.value.participants.size >= requiredRecipients) {
+            _state.update { it.copy(
+                errorMessage = "You already have $requiredRecipients recipient(s). Remove one to add another.",
+                showAddPhoneDialog = false
+            ) }
+            return
+        }
+
         val validation = validationUseCase.validatePhone(phone)
         if (!validation.isValid) {
             _state.update { it.copy(errorMessage = validation.errorMessage) }
@@ -240,6 +264,16 @@ class CreateSplitViewModel @Inject constructor(
     }
 
     private fun addEmailParticipant(email: String, name: String) {
+        // Check if we already have enough participants
+        val requiredRecipients = _state.value.numberOfPeople
+        if (_state.value.participants.size >= requiredRecipients) {
+            _state.update { it.copy(
+                errorMessage = "You already have $requiredRecipients recipient(s). Remove one to add another.",
+                showAddEmailDialog = false
+            ) }
+            return
+        }
+
         val validation = validationUseCase.validateEmail(email)
         if (!validation.isValid) {
             _state.update { it.copy(errorMessage = validation.errorMessage) }
@@ -286,10 +320,13 @@ class CreateSplitViewModel @Inject constructor(
     private fun recalculateSplit() {
         val currentState = _state.value
         val totalAmount = currentState.totalAmount.toDoubleOrNull() ?: 0.0
-        val numberOfPeople = currentState.numberOfPeople
+        val numberOfRecipients = currentState.numberOfPeople // This is number of people to SEND to
 
-        if (totalAmount > 0 && numberOfPeople > 0) {
-            val perPerson = totalAmount / numberOfPeople
+        // Total splitters = recipients + you (if included)
+        val totalSplitters = if (currentState.includeYourself) numberOfRecipients + 1 else numberOfRecipients
+
+        if (totalAmount > 0 && totalSplitters > 0) {
+            val perPerson = totalAmount / totalSplitters
             val yourShare = if (currentState.includeYourself) perPerson else 0.0
 
             _state.update { state ->
@@ -301,19 +338,16 @@ class CreateSplitViewModel @Inject constructor(
 
             // Update participants with calculated amounts if in EQUAL mode
             if (currentState.splitMode == SplitMode.EQUAL && currentState.participants.isNotEmpty()) {
-                val result = calculateSplitUseCase.execute(
-                    totalAmount = totalAmount,
-                    participants = currentState.participants,
-                    splitMode = SplitMode.EQUAL
-                )
+                // Each recipient pays perPerson amount
+                val updatedParticipants = currentState.participants.map { it.copy(amount = perPerson) }
                 _state.update { state ->
                     state.copy(
-                        participants = result.participants,
-                        hasRoundingAdjustment = result.hasRoundingAdjustment,
-                        adjustmentAmount = result.adjustmentApplied
+                        participants = updatedParticipants,
+                        hasRoundingAdjustment = false,
+                        adjustmentAmount = 0.0
                     )
                 }
-                billSplitStateHolder.updateParticipants(result.participants)
+                billSplitStateHolder.updateParticipants(updatedParticipants)
             }
 
             billSplitStateHolder.updateTotalAmount(totalAmount)
@@ -343,14 +377,15 @@ class CreateSplitViewModel @Inject constructor(
         }
 
         // Validate we have the correct number of recipients
-        val requiredRecipients = if (currentState.includeYourself) currentState.numberOfPeople - 1 else currentState.numberOfPeople
+        // numberOfPeople = number of recipients to send to
+        val requiredRecipients = currentState.numberOfPeople
 
         if (requiredRecipients > 0 && currentState.participants.isEmpty()) {
             _state.update { it.copy(errorMessage = "Please add at least one recipient to send the request") }
             hasError = true
         } else if (requiredRecipients > 0 && currentState.participants.size < requiredRecipients) {
             _state.update {
-                it.copy(errorMessage = "Please add ${requiredRecipients - currentState.participants.size} more recipient(s). You selected $requiredRecipients people to send to.")
+                it.copy(errorMessage = "Please add ${requiredRecipients - currentState.participants.size} more recipient(s). You need to add $requiredRecipients people.")
             }
             hasError = true
         }
@@ -365,7 +400,9 @@ class CreateSplitViewModel @Inject constructor(
         if (!hasError) {
             // Calculate and set amounts for participants
             val total = currentState.totalAmount.toDoubleOrNull() ?: 0.0
-            val perPerson = if (currentState.numberOfPeople > 0) total / currentState.numberOfPeople else 0.0
+            // Total splitters = recipients + you (if included)
+            val totalSplitters = if (currentState.includeYourself) currentState.numberOfPeople + 1 else currentState.numberOfPeople
+            val perPerson = if (totalSplitters > 0) total / totalSplitters else 0.0
 
             val updatedParticipants = currentState.participants.map {
                 it.copy(amount = perPerson)

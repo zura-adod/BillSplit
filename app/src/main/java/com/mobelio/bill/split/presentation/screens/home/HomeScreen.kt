@@ -1,5 +1,6 @@
 package com.mobelio.bill.split.presentation.screens.home
 
+import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
@@ -17,22 +18,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mobelio.bill.split.ui.theme.*
 import kotlinx.coroutines.delay
-import kotlin.math.abs
+import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -41,86 +44,31 @@ fun HomeScreen(
     onCreateSplit: () -> Unit,
     onHistoryClick: () -> Unit = {}
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "blob_animation")
+    val context = LocalContext.current
+    val density = LocalDensity.current
+    val configuration = LocalConfiguration.current
+    val screenHeight = with(density) { configuration.screenHeightDp.dp.toPx() }
 
-    // Smooth flowing blob animations
-    val time by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(20000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "time"
+    // Swipe state
+    var dragOffset by remember { mutableFloatStateOf(0f) }
+    var isNavigating by remember { mutableStateOf(false) }
+    val swipeThreshold = screenHeight * 0.15f
+
+    // Animated swipe progress
+    val animatedOffset by animateFloatAsState(
+        targetValue = if (isNavigating) -screenHeight else dragOffset,
+        animationSpec = if (isNavigating) {
+            tween(400, easing = FastOutSlowInEasing)
+        } else {
+            spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)
+        },
+        finishedListener = {
+            if (isNavigating) {
+                onCreateSplit()
+            }
+        },
+        label = "swipe_offset"
     )
-
-    // Individual blob movement offsets for organic feel
-    val blob1OffsetX by infiniteTransition.animateFloat(
-        initialValue = -20f,
-        targetValue = 20f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(4000, easing = EaseInOutSine),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "blob1X"
-    )
-
-    val blob1OffsetY by infiniteTransition.animateFloat(
-        initialValue = -15f,
-        targetValue = 15f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(3500, easing = EaseInOutSine),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "blob1Y"
-    )
-
-    val blob2OffsetX by infiniteTransition.animateFloat(
-        initialValue = 15f,
-        targetValue = -15f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(5000, easing = EaseInOutSine),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "blob2X"
-    )
-
-    val blob2OffsetY by infiniteTransition.animateFloat(
-        initialValue = -20f,
-        targetValue = 20f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(4500, easing = EaseInOutSine),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "blob2Y"
-    )
-
-    val blob3Scale by infiniteTransition.animateFloat(
-        initialValue = 0.9f,
-        targetValue = 1.1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(3000, easing = EaseInOutSine),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "blob3Scale"
-    )
-
-    val blob4Scale by infiniteTransition.animateFloat(
-        initialValue = 1.05f,
-        targetValue = 0.95f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(3500, easing = EaseInOutSine),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "blob4Scale"
-    )
-
-    // Swipe UP state
-    var swipeOffset by remember { mutableFloatStateOf(0f) }
-    var isSwipeComplete by remember { mutableStateOf(false) }
-    val swipeThreshold = -150f // Negative because swiping UP
-
-    val swipeProgress = (swipeOffset / swipeThreshold).coerceIn(0f, 1f)
 
     // Entry animation
     var isVisible by remember { mutableStateOf(false) }
@@ -129,16 +77,113 @@ fun HomeScreen(
         isVisible = true
     }
 
-    // Handle swipe completion
-    LaunchedEffect(isSwipeComplete) {
-        if (isSwipeComplete) {
-            delay(300)
-            onCreateSplit()
-            delay(500)
-            isSwipeComplete = false
-            swipeOffset = 0f
-        }
-    }
+    // INFINITE blob animations
+    val infiniteTransition = rememberInfiniteTransition(label = "infinite_blobs")
+
+    val phase1 by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 2 * PI.toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(8000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "phase1"
+    )
+
+    val phase2 by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 2 * PI.toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(12000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "phase2"
+    )
+
+    val phase3 by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 2 * PI.toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(10000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "phase3"
+    )
+
+    // Blob position animations for floating effect
+    val floatX1 by infiniteTransition.animateFloat(
+        initialValue = -30f,
+        targetValue = 30f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(5000, easing = EaseInOutSine),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "floatX1"
+    )
+
+    val floatY1 by infiniteTransition.animateFloat(
+        initialValue = -20f,
+        targetValue = 20f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(4000, easing = EaseInOutSine),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "floatY1"
+    )
+
+    val floatX2 by infiniteTransition.animateFloat(
+        initialValue = 20f,
+        targetValue = -20f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(6000, easing = EaseInOutSine),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "floatX2"
+    )
+
+    val floatY2 by infiniteTransition.animateFloat(
+        initialValue = -25f,
+        targetValue = 25f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(5500, easing = EaseInOutSine),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "floatY2"
+    )
+
+    // Scale animations for breathing effect
+    val scale1 by infiniteTransition.animateFloat(
+        initialValue = 0.95f,
+        targetValue = 1.05f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(4000, easing = EaseInOutSine),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "scale1"
+    )
+
+    val scale2 by infiniteTransition.animateFloat(
+        initialValue = 1.02f,
+        targetValue = 0.98f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(3500, easing = EaseInOutSine),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "scale2"
+    )
+
+    // Swipe indicator bounce
+    val indicatorBounce by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = EaseInOutSine),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "bounce"
+    )
+
+    val swipeProgress = (-animatedOffset / swipeThreshold).coerceIn(0f, 1.5f)
 
     Box(
         modifier = Modifier
@@ -147,209 +192,186 @@ fun HomeScreen(
             .pointerInput(Unit) {
                 detectVerticalDragGestures(
                     onDragEnd = {
-                        if (swipeOffset <= swipeThreshold) {
-                            isSwipeComplete = true
+                        if (dragOffset < -swipeThreshold && !isNavigating) {
+                            isNavigating = true
                         } else {
-                            swipeOffset = 0f
+                            dragOffset = 0f
                         }
                     },
-                    onDragCancel = {
-                        swipeOffset = 0f
-                    },
+                    onDragCancel = { dragOffset = 0f },
                     onVerticalDrag = { change, dragAmount ->
                         change.consume()
-                        // Only allow upward swipe (negative values)
-                        if (dragAmount < 0 || swipeOffset < 0) {
-                            swipeOffset = (swipeOffset + dragAmount).coerceIn(swipeThreshold - 50f, 0f)
+                        if (!isNavigating) {
+                            dragOffset = (dragOffset + dragAmount).coerceIn(-screenHeight * 0.5f, 50f)
                         }
                     }
                 )
             }
     ) {
-        // Animated Blob Background - Smoother, more organic
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val width = size.width
-            val height = size.height
+        // Animated Blob Background - INFINITE ANIMATION
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .scale(1f + swipeProgress * 0.1f)
+        ) {
+            val w = size.width
+            val h = size.height
 
-            // Pink blob - flows smoothly at top right
-            drawSmoothBlob(
-                center = Offset(
-                    width * 0.85f + blob1OffsetX,
-                    height * 0.12f + blob1OffsetY
-                ),
-                baseRadius = width * 0.38f,
-                time = time,
-                color = BlobPink.copy(alpha = 0.9f),
-                complexity = 5,
-                waveAmplitude = 0.15f
+            // Pink blob - top right
+            drawAnimatedBlob(
+                center = Offset(w * 0.82f + floatX1, h * 0.08f + floatY1),
+                size = Size(w * 0.55f * scale1, h * 0.22f * scale1),
+                morphPhase = phase1,
+                color = BlobPink
             )
 
-            // Purple blob - left side, flowing
-            drawSmoothBlob(
-                center = Offset(
-                    width * 0.08f + blob2OffsetX,
-                    height * 0.42f + blob2OffsetY
-                ),
-                baseRadius = width * 0.42f * blob3Scale,
-                time = time * 0.8f,
-                color = BlobPurple.copy(alpha = 0.85f),
-                complexity = 6,
-                waveAmplitude = 0.12f
+            // Purple blob - left side
+            drawAnimatedBlob(
+                center = Offset(w * 0.05f + floatX2, h * 0.38f + floatY2),
+                size = Size(w * 0.5f * scale2, h * 0.28f * scale2),
+                morphPhase = phase2,
+                color = BlobPurple
             )
 
             // Yellow blob - bottom right
-            drawSmoothBlob(
-                center = Offset(
-                    width * 0.92f + blob2OffsetX * 0.5f,
-                    height * 0.78f + blob1OffsetY * 0.7f
-                ),
-                baseRadius = width * 0.32f * blob4Scale,
-                time = time * 1.2f,
-                color = BlobYellow.copy(alpha = 0.88f),
-                complexity = 5,
-                waveAmplitude = 0.18f
+            drawAnimatedBlob(
+                center = Offset(w * 0.88f + floatX1 * 0.5f, h * 0.72f + floatY1 * 0.7f),
+                size = Size(w * 0.42f * scale1, h * 0.18f * scale1),
+                morphPhase = phase3,
+                color = BlobYellow
             )
 
             // Cyan blob - bottom left
-            drawSmoothBlob(
-                center = Offset(
-                    width * 0.12f + blob1OffsetX * 0.6f,
-                    height * 0.88f + blob2OffsetY * 0.5f
-                ),
-                baseRadius = width * 0.36f,
-                time = time * 0.9f,
-                color = BlobCyan.copy(alpha = 0.82f),
-                complexity = 5,
-                waveAmplitude = 0.14f
+            drawAnimatedBlob(
+                center = Offset(w * 0.12f + floatX2 * 0.6f, h * 0.85f + floatY2 * 0.5f),
+                size = Size(w * 0.48f * scale2, h * 0.2f * scale2),
+                morphPhase = phase1 + phase2,
+                color = BlobCyan
             )
 
-            // Small accent blob - center area
-            drawSmoothBlob(
-                center = Offset(
-                    width * 0.55f + blob1OffsetX * 0.3f,
-                    height * 0.28f + blob2OffsetY * 0.4f
-                ),
-                baseRadius = width * 0.12f * blob3Scale,
-                time = time * 1.5f,
-                color = BlobPurple.copy(alpha = 0.5f),
-                complexity = 4,
-                waveAmplitude = 0.2f
+            // Small purple accent blob
+            drawAnimatedBlob(
+                center = Offset(w * 0.6f + floatX1 * 0.3f, h * 0.25f + floatY2 * 0.4f),
+                size = Size(w * 0.18f * scale1, h * 0.08f * scale1),
+                morphPhase = phase2 * 1.5f,
+                color = BlobPurple.copy(alpha = 0.5f)
             )
         }
 
-        // Content with swipe offset
+        // Main Content
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .offset(y = with(density) { animatedOffset.toDp() })
+                .alpha(1f - (swipeProgress * 0.3f).coerceIn(0f, 0.5f))
                 .statusBarsPadding()
-                .offset(y = (swipeOffset * 0.3f).dp)
-                .alpha(1f - swipeProgress * 0.5f)
-                .padding(horizontal = 24.dp),
+                .padding(horizontal = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(50.dp))
+            Spacer(modifier = Modifier.height(48.dp))
 
-            // Title with animation
+            // Title
             AnimatedVisibility(
                 visible = isVisible,
-                enter = fadeIn(animationSpec = tween(800, delayMillis = 200)) +
-                        slideInVertically(initialOffsetY = { -50 }, animationSpec = tween(800, delayMillis = 200))
+                enter = fadeIn(tween(600, delayMillis = 100)) +
+                        slideInVertically(initialOffsetY = { -40 }, animationSpec = tween(600, delayMillis = 100))
             ) {
-                Column(
-                    horizontalAlignment = Alignment.Start,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
                     Text(
                         text = "Split bills",
-                        fontSize = 28.sp,
-                        color = TextWhite.copy(alpha = 0.7f),
+                        fontSize = 26.sp,
+                        color = TextWhite.copy(alpha = 0.75f),
                         fontWeight = FontWeight.Light
                     )
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "with Friends",
-                        fontSize = 52.sp,
+                        fontSize = 54.sp,
                         color = TextWhite,
                         fontWeight = FontWeight.Bold,
-                        lineHeight = 56.sp
+                        lineHeight = 58.sp
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.weight(0.8f))
+            Spacer(modifier = Modifier.weight(0.6f))
 
-            // Info cards - NOT clickable, just informational with subtle animations
+            // Info Banners with rounded corners
             AnimatedVisibility(
                 visible = isVisible,
-                enter = fadeIn(animationSpec = tween(800, delayMillis = 400)) +
-                        slideInVertically(initialOffsetY = { 100 }, animationSpec = tween(800, delayMillis = 400))
+                enter = fadeIn(tween(600, delayMillis = 300)) +
+                        slideInVertically(initialOffsetY = { 60 }, animationSpec = tween(600, delayMillis = 300))
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    InfoCard(
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    InfoBanner(
                         icon = Icons.Default.Groups,
                         title = "Equal or Custom Split",
-                        subtitle = "Divide expenses any way you want",
-                        color = BlobPink,
-                        delay = 0
+                        description = "Divide expenses any way you want",
+                        accentColor = BlobPink,
+                        floatDelay = 0
                     )
-                    InfoCard(
-                        icon = Icons.Default.CurrencyExchange,
+                    InfoBanner(
+                        icon = Icons.Default.AccountBalanceWallet,
                         title = "Multi Currency",
-                        subtitle = "Support for GEL, USD, EUR & more",
-                        color = BlobCyan,
-                        delay = 100
+                        description = "Support for GEL, USD, EUR & more",
+                        accentColor = BlobCyan,
+                        floatDelay = 150
                     )
-                    InfoCard(
+                    InfoBanner(
                         icon = Icons.Default.Share,
                         title = "Instant Share",
-                        subtitle = "Send via WhatsApp, Viber, SMS",
-                        color = BlobYellow,
-                        delay = 200
+                        description = "Send via WhatsApp, Viber, SMS",
+                        accentColor = BlobYellow,
+                        floatDelay = 300
                     )
                 }
             }
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // Swipe UP indicator
+            // Swipe Up Indicator - CENTERED
             AnimatedVisibility(
-                visible = isVisible,
-                enter = fadeIn(animationSpec = tween(800, delayMillis = 600)) +
-                        slideInVertically(initialOffsetY = { 80 }, animationSpec = tween(800, delayMillis = 600))
+                visible = isVisible && !isNavigating,
+                enter = fadeIn(tween(600, delayMillis = 500)) +
+                        slideInVertically(initialOffsetY = { 40 }, animationSpec = tween(600, delayMillis = 500)),
+                exit = fadeOut(tween(200)) + slideOutVertically(targetOffsetY = { -100 })
             ) {
-                SwipeUpIndicator(
-                    progress = swipeProgress,
-                    isComplete = isSwipeComplete
-                )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // History link
-            AnimatedVisibility(
-                visible = isVisible && !isSwipeComplete,
-                enter = fadeIn(animationSpec = tween(800, delayMillis = 700))
-            ) {
-                TextButton(onClick = onHistoryClick) {
-                    Icon(
-                        Icons.Default.History,
-                        contentDescription = null,
-                        tint = TextGray,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "View History",
-                        color = TextGray,
-                        fontSize = 14.sp
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    SwipeUpIndicator(
+                        progress = swipeProgress,
+                        bounceOffset = indicatorBounce
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // History Button
+            AnimatedVisibility(
+                visible = isVisible && !isNavigating,
+                enter = fadeIn(tween(400, delayMillis = 600)),
+                exit = fadeOut(tween(150))
+            ) {
+                TextButton(
+                    onClick = {
+                        Toast.makeText(context, "History coming soon!", Toast.LENGTH_SHORT).show()
+                        onHistoryClick()
+                    }
+                ) {
+                    Icon(Icons.Default.History, contentDescription = null, tint = TextGray, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("View History", color = TextGray, fontSize = 14.sp)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(28.dp))
         }
 
-        // Swipe progress overlay
-        if (swipeProgress > 0.3f) {
+        // Swipe overlay
+        if (swipeProgress > 0.2f) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -357,43 +379,61 @@ fun HomeScreen(
                         Brush.verticalGradient(
                             colors = listOf(
                                 Color.Transparent,
-                                BlobPink.copy(alpha = swipeProgress * 0.3f),
-                                BlobPurple.copy(alpha = swipeProgress * 0.4f)
+                                BlobPink.copy(alpha = swipeProgress * 0.15f),
+                                BlobPurple.copy(alpha = swipeProgress * 0.25f)
                             )
                         )
                     )
             )
         }
+
+        // Navigation overlay
+        AnimatedVisibility(
+            visible = isNavigating,
+            enter = fadeIn(tween(300)),
+            exit = fadeOut(tween(200))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(DarkBackground, BlobPurple.copy(alpha = 0.3f), DarkBackground)
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = BlobPink, strokeWidth = 3.dp, modifier = Modifier.size(48.dp))
+            }
+        }
     }
 }
 
 @Composable
-private fun InfoCard(
+private fun InfoBanner(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,
-    subtitle: String,
-    color: Color,
-    delay: Int
+    description: String,
+    accentColor: Color,
+    floatDelay: Int
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "info_card_$title")
+    val infiniteTransition = rememberInfiniteTransition(label = "banner_$title")
 
-    // Subtle floating animation
     val floatOffset by infiniteTransition.animateFloat(
         initialValue = 0f,
-        targetValue = 4f,
+        targetValue = 6f,
         animationSpec = infiniteRepeatable(
-            animation = tween(2000 + delay, easing = EaseInOutSine, delayMillis = delay),
+            animation = tween(2500 + floatDelay, easing = EaseInOutSine),
             repeatMode = RepeatMode.Reverse
         ),
         label = "float"
     )
 
-    // Subtle glow pulse
     val glowAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.1f,
-        targetValue = 0.25f,
+        initialValue = 0.08f,
+        targetValue = 0.18f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1500 + delay, easing = EaseInOutSine, delayMillis = delay),
+            animation = tween(2000 + floatDelay, easing = EaseInOutSine),
             repeatMode = RepeatMode.Reverse
         ),
         label = "glow"
@@ -404,42 +444,42 @@ private fun InfoCard(
             .fillMaxWidth()
             .offset(y = floatOffset.dp)
     ) {
-        // Glow effect behind
+        // Glow shadow
         Box(
             modifier = Modifier
                 .matchParentSize()
-                .offset(y = 4.dp)
-                .blur(20.dp)
-                .clip(RoundedCornerShape(20.dp))
-                .background(color.copy(alpha = glowAlpha))
+                .offset(y = 6.dp)
+                .clip(RoundedCornerShape(22.dp))
+                .blur(24.dp)
+                .background(accentColor.copy(alpha = glowAlpha))
         )
 
-        // Card content
+        // Card with ROUNDED icon container
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
+                .clip(RoundedCornerShape(22.dp))
                 .background(
                     Brush.horizontalGradient(
                         colors = listOf(
-                            CardGlass.copy(alpha = 0.5f),
-                            CardGlass.copy(alpha = 0.3f)
+                            CardGlass.copy(alpha = 0.55f),
+                            CardGlass.copy(alpha = 0.35f)
                         )
                     )
                 )
                 .padding(18.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Icon container with gradient
+            // Icon with ROUNDED corners
             Box(
                 modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(14.dp))
+                    .size(52.dp)
+                    .clip(RoundedCornerShape(16.dp))
                     .background(
                         Brush.linearGradient(
                             colors = listOf(
-                                color.copy(alpha = 0.3f),
-                                color.copy(alpha = 0.15f)
+                                accentColor.copy(alpha = 0.35f),
+                                accentColor.copy(alpha = 0.15f)
                             )
                         )
                     ),
@@ -448,8 +488,8 @@ private fun InfoCard(
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = color,
-                    modifier = Modifier.size(26.dp)
+                    tint = accentColor,
+                    modifier = Modifier.size(28.dp)
                 )
             }
 
@@ -462,12 +502,12 @@ private fun InfoCard(
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 16.sp
                 )
-                Spacer(modifier = Modifier.height(2.dp))
+                Spacer(modifier = Modifier.height(3.dp))
                 Text(
-                    text = subtitle,
+                    text = description,
                     color = TextGray,
                     fontSize = 13.sp,
-                    lineHeight = 16.sp
+                    lineHeight = 17.sp
                 )
             }
         }
@@ -477,139 +517,88 @@ private fun InfoCard(
 @Composable
 private fun SwipeUpIndicator(
     progress: Float,
-    isComplete: Boolean
+    bounceOffset: Float
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "swipe_hint")
-
-    val bounceOffset by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = -12f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = EaseInOutSine),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "bounce"
-    )
-
-    val arrowAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.4f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = EaseInOutSine),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "arrow_alpha"
-    )
+    val bounce = if (progress < 0.1f) bounceOffset * 12f else 0f
 
     Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.offset(y = if (!isComplete) bounceOffset.dp else 0.dp)
+        modifier = Modifier.offset(y = (-bounce).dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Arrow icons pointing up
-        if (!isComplete) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy((-12).dp)
-            ) {
-                repeat(3) { index ->
-                    Icon(
-                        Icons.Default.KeyboardArrowUp,
-                        contentDescription = null,
-                        tint = if (progress > 0.3f) {
-                            BlobPink.copy(alpha = 0.5f + index * 0.2f)
-                        } else {
-                            TextWhite.copy(alpha = arrowAlpha * (0.3f + index * 0.25f))
-                        },
-                        modifier = Modifier.size(32.dp)
-                    )
-                }
+        // Arrows
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy((-14).dp)
+        ) {
+            listOf(0.3f, 0.5f, 0.8f).forEachIndexed { index, baseAlpha ->
+                val alpha = if (progress > 0.3f) (baseAlpha + progress * 0.3f).coerceAtMost(1f)
+                else baseAlpha + bounceOffset * 0.2f
+                Icon(
+                    Icons.Default.KeyboardArrowUp,
+                    contentDescription = null,
+                    tint = if (progress > 0.5f) BlobPink.copy(alpha = alpha) else TextWhite.copy(alpha = alpha),
+                    modifier = Modifier.size(32.dp)
+                )
             }
-
-            Spacer(modifier = Modifier.height(8.dp))
         }
 
-        // Progress indicator or text
+        Spacer(modifier = Modifier.height(12.dp))
+
         Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(24.dp))
+                .clip(RoundedCornerShape(28.dp))
                 .background(
-                    if (isComplete) {
-                        Brush.horizontalGradient(listOf(SuccessGreen, BlobCyan))
-                    } else if (progress > 0.3f) {
-                        Brush.horizontalGradient(listOf(BlobPink.copy(alpha = 0.3f), BlobPurple.copy(alpha = 0.3f)))
-                    } else {
-                        Brush.horizontalGradient(listOf(CardGlass.copy(alpha = 0.4f), CardGlass.copy(alpha = 0.3f)))
+                    when {
+                        progress > 0.8f -> Brush.horizontalGradient(listOf(SuccessGreen, BlobCyan))
+                        progress > 0.3f -> Brush.horizontalGradient(listOf(BlobPink.copy(alpha = 0.4f), BlobPurple.copy(alpha = 0.4f)))
+                        else -> Brush.horizontalGradient(listOf(CardGlass.copy(alpha = 0.5f), CardGlass.copy(alpha = 0.35f)))
                     }
                 )
-                .padding(horizontal = 28.dp, vertical = 14.dp),
-            contentAlignment = Alignment.Center
+                .padding(horizontal = 32.dp, vertical = 16.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (isComplete) {
-                    Icon(
-                        Icons.Default.Check,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(22.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                }
-                Text(
-                    text = when {
-                        isComplete -> "Let's Go!"
-                        progress > 0.7f -> "Release to start!"
-                        progress > 0.3f -> "Keep going..."
-                        else -> "Swipe up to start"
-                    },
-                    color = if (isComplete || progress > 0.3f) Color.White else TextWhite.copy(alpha = 0.8f),
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 16.sp
-                )
-            }
+            Text(
+                text = when {
+                    progress > 0.8f -> "Release now!"
+                    progress > 0.3f -> "Keep going..."
+                    else -> "Swipe up to start"
+                },
+                color = TextWhite,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 16.sp
+            )
         }
     }
 }
 
-// Smooth organic blob drawing function
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSmoothBlob(
+// Draw animated organic blob
+private fun DrawScope.drawAnimatedBlob(
     center: Offset,
-    baseRadius: Float,
-    time: Float,
-    color: Color,
-    complexity: Int = 5,
-    waveAmplitude: Float = 0.15f
+    size: Size,
+    morphPhase: Float,
+    color: Color
 ) {
     val path = Path()
-    val points = complexity * 12 // More points for smoother curve
-    val angleStep = 360f / points
+    val points = 80
 
     for (i in 0 until points) {
-        val angle = Math.toRadians((i * angleStep).toDouble())
+        val angle = (i.toFloat() / points) * 2 * PI
 
-        // Multiple sine waves for organic shape
-        val wave1 = sin(angle * complexity + Math.toRadians(time.toDouble())) * waveAmplitude
-        val wave2 = sin(angle * (complexity - 1) + Math.toRadians(time * 0.7).toDouble()) * waveAmplitude * 0.5f
-        val wave3 = cos(angle * (complexity + 1) + Math.toRadians(time * 1.3).toDouble()) * waveAmplitude * 0.3f
+        val r1 = 1f + 0.2f * sin(angle * 2 + morphPhase).toFloat()
+        val r2 = 1f + 0.15f * cos(angle * 3 + morphPhase * 0.7f).toFloat()
+        val r3 = 1f + 0.1f * sin(angle * 4 + morphPhase * 1.3f).toFloat()
 
-        val radiusVariation = 1f + wave1.toFloat() + wave2.toFloat() + wave3.toFloat()
-        val radius = baseRadius * radiusVariation
+        val radiusMod = (r1 * r2 * r3) * 0.85f
 
-        val x = center.x + (radius * cos(angle)).toFloat()
-        val y = center.y + (radius * sin(angle)).toFloat()
+        val rx = size.width * 0.5f * radiusMod
+        val ry = size.height * 0.5f * radiusMod
 
-        if (i == 0) {
-            path.moveTo(x, y)
-        } else {
-            path.lineTo(x, y)
-        }
+        val x = center.x + rx * cos(angle).toFloat()
+        val y = center.y + ry * sin(angle).toFloat()
+
+        if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
     }
 
     path.close()
-
-    drawPath(
-        path = path,
-        color = color,
-        style = Fill
-    )
+    drawPath(path = path, color = color, style = Fill)
 }
 

@@ -161,5 +161,18 @@ class ReviewShareViewModel @Inject constructor(
             false
         }
     }
-}
 
+    /**
+     * Generate a combined message for Share All functionality
+     */
+    fun generateCombinedMessage(): String {
+        val currentState = _state.value
+        return generateMessageUseCase.generateCombinedMessage(
+            participants = currentState.billSplit.participants,
+            paymentDetails = currentState.billSplit.paymentDetails,
+            currency = currentState.billSplit.currency,
+            totalAmount = currentState.billSplit.totalAmount,
+            note = currentState.billSplit.note
+        )
+    }
+}

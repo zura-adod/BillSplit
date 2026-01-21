@@ -65,16 +65,57 @@ fun CreateSplitScreen(
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
 
-    // Animation
+    // Animation - INFINITE blob animations
     val infiniteTransition = rememberInfiniteTransition(label = "blob_anim")
-    val blobPhase by infiniteTransition.animateFloat(
+
+    val blobPhase1 by infiniteTransition.animateFloat(
         initialValue = 0f,
-        targetValue = 360f,
+        targetValue = (2 * Math.PI).toFloat(),
         animationSpec = infiniteRepeatable(
-            animation = tween(15000, easing = LinearEasing),
+            animation = tween(10000, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
-        label = "blob_phase"
+        label = "blob_phase1"
+    )
+
+    val blobPhase2 by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2 * Math.PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(14000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "blob_phase2"
+    )
+
+    val floatX by infiniteTransition.animateFloat(
+        initialValue = -25f,
+        targetValue = 25f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(6000, easing = EaseInOutSine),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "floatX"
+    )
+
+    val floatY by infiniteTransition.animateFloat(
+        initialValue = -20f,
+        targetValue = 20f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(5000, easing = EaseInOutSine),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "floatY"
+    )
+
+    val blobScale by infiniteTransition.animateFloat(
+        initialValue = 0.95f,
+        targetValue = 1.05f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(4000, easing = EaseInOutSine),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "blobScale"
     )
 
     // Handle navigation
@@ -118,25 +159,33 @@ fun CreateSplitScreen(
             .fillMaxSize()
             .background(DarkBackground)
     ) {
-        // Animated blob background
+        // Animated blob background - INFINITE
         Canvas(modifier = Modifier.fillMaxSize()) {
             val width = size.width
             val height = size.height
 
-            // Top right pink blob
-            drawBlobShape(
-                center = Offset(width * 1.1f, height * 0.05f),
-                baseRadius = width * 0.4f,
-                phase = blobPhase,
+            // Top right pink blob with movement
+            drawAnimatedBlob(
+                center = Offset(width * 1.1f + floatX, height * 0.05f + floatY),
+                baseRadius = width * 0.4f * blobScale,
+                morphPhase = blobPhase1,
                 color = BlobPink.copy(alpha = 0.6f)
             )
 
-            // Bottom left purple blob
-            drawBlobShape(
-                center = Offset(width * -0.1f, height * 0.9f),
-                baseRadius = width * 0.35f,
-                phase = blobPhase * 0.8f,
+            // Bottom left purple blob with movement
+            drawAnimatedBlob(
+                center = Offset(width * -0.1f + floatX * 0.5f, height * 0.9f + floatY * 0.7f),
+                baseRadius = width * 0.35f * blobScale,
+                morphPhase = blobPhase2,
                 color = BlobPurple.copy(alpha = 0.5f)
+            )
+
+            // Small cyan accent blob
+            drawAnimatedBlob(
+                center = Offset(width * 0.9f + floatY * 0.3f, height * 0.5f + floatX * 0.4f),
+                baseRadius = width * 0.15f * blobScale,
+                morphPhase = blobPhase1 + blobPhase2,
+                color = BlobCyan.copy(alpha = 0.3f)
             )
         }
 
@@ -216,14 +265,15 @@ fun CreateSplitScreen(
                             Spacer(modifier = Modifier.height(16.dp))
 
                             // Include yourself toggle
+                            val totalSplitters = if (state.includeYourself) state.numberOfPeople + 1 else state.numberOfPeople
                             ToggleOption(
                                 checked = state.includeYourself,
                                 onCheckedChange = { viewModel.onEvent(CreateSplitEvent.IncludeYourselfChanged(it)) },
                                 label = "Include myself in split",
                                 sublabel = if (state.includeYourself)
-                                    "Amount split among ${state.numberOfPeople} people (including you)"
+                                    "Split among ${totalSplitters} people (you + ${state.numberOfPeople} others)"
                                 else
-                                    "Amount split among ${state.numberOfPeople} people (you don't pay)"
+                                    "Split among ${state.numberOfPeople} people (you don't pay)"
                             )
                         }
                     }
@@ -241,7 +291,7 @@ fun CreateSplitScreen(
                     }
                 }
 
-                // Payment Details Card
+                // Payment Details Card - only enabled when amount is entered
                 item {
                     GlassCard {
                         Column {
@@ -260,15 +310,26 @@ fun CreateSplitScreen(
 
                             Spacer(modifier = Modifier.height(16.dp))
 
-                            // Payment value input
-                            DarkTextField(
+                            // Payment value input with inline clear button
+                            PaymentInputField(
                                 value = state.paymentValue,
                                 onValueChange = { viewModel.onEvent(CreateSplitEvent.PaymentValueChanged(it)) },
+                                onClear = { viewModel.onEvent(CreateSplitEvent.ClearPaymentValue) },
                                 placeholder = if (state.paymentType == PaymentType.IBAN)
                                     "GB82 WEST 1234 5698 7654 32" else "1234 5678 9012 3456",
                                 keyboardType = if (state.paymentType == PaymentType.CARD)
-                                    KeyboardType.Number else KeyboardType.Text
+                                    KeyboardType.Number else KeyboardType.Text,
+                                enabled = state.totalAmount.isNotEmpty()
                             )
+
+                            if (state.totalAmount.isEmpty()) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "Enter amount first",
+                                    color = BlobYellow,
+                                    fontSize = 12.sp
+                                )
+                            }
 
                             Spacer(modifier = Modifier.height(12.dp))
 
@@ -278,14 +339,7 @@ fun CreateSplitScreen(
                                     icon = Icons.Outlined.ContentPaste,
                                     color = BlobCyan,
                                     onClick = { viewModel.onEvent(CreateSplitEvent.PastePaymentValue) },
-                                    modifier = Modifier.weight(1f)
-                                )
-                                SmallActionButton(
-                                    text = "Clear",
-                                    icon = Icons.Outlined.Clear,
-                                    color = ErrorRed,
-                                    onClick = { viewModel.onEvent(CreateSplitEvent.ClearPaymentValue) },
-                                    enabled = state.paymentValue.isNotBlank(),
+                                    enabled = state.totalAmount.isNotEmpty(),
                                     modifier = Modifier.weight(1f)
                                 )
                                 SmallActionButton(
@@ -301,8 +355,8 @@ fun CreateSplitScreen(
                     }
                 }
 
-                // Recipients Card - show required count based on include yourself
-                val requiredRecipients = if (state.includeYourself) state.numberOfPeople - 1 else state.numberOfPeople
+                // Recipients Card - numberOfPeople is the number of recipients to add
+                val requiredRecipients = state.numberOfPeople
 
                 // Recipients Card
                 item {
@@ -322,13 +376,6 @@ fun CreateSplitScreen(
                                     CountBadge(
                                         current = state.participants.size,
                                         total = requiredRecipients
-                                    )
-                                } else {
-                                    // When include yourself is checked and only 1 person
-                                    Text(
-                                        text = "Optional",
-                                        color = TextGray,
-                                        fontSize = 12.sp
                                     )
                                 }
                             }
@@ -703,20 +750,20 @@ private fun ToggleOption(
 @Composable
 private fun SplitAmountPreview(
     totalAmount: Double,
-    numberOfPeople: Int,
+    numberOfPeople: Int,  // This is the number of recipients (others)
     includeYourself: Boolean,
     currency: Currency
 ) {
-    // If includeYourself is true, split among numberOfPeople (you + others)
-    // If false, split among numberOfPeople (all others, you're not paying)
-    val perPerson = if (numberOfPeople > 0) totalAmount / numberOfPeople else 0.0
+    // numberOfPeople = number of recipients to send to
+    // If includeYourself is true, total splitters = numberOfPeople + 1 (you)
+    // If false, total splitters = numberOfPeople (only others pay)
+    val totalSplitters = if (includeYourself) numberOfPeople + 1 else numberOfPeople
+    val perPerson = if (totalSplitters > 0) totalAmount / totalSplitters else 0.0
     val formatter = NumberFormat.getNumberInstance(Locale.US).apply {
         minimumFractionDigits = 2
         maximumFractionDigits = 2
     }
 
-    // Calculate how many recipients need to be added
-    val recipientsNeeded = if (includeYourself) numberOfPeople - 1 else numberOfPeople
 
     Box(
         modifier = Modifier
@@ -756,10 +803,11 @@ private fun SplitAmountPreview(
                 }
             }
 
-            // People avatars
+            // People avatars - show totalSplitters count
             Row {
                 val colors = listOf(BlobYellow, BlobCyan, BlobPink, BlobPurple)
-                repeat(minOf(numberOfPeople, 4)) { index ->
+                val displayCount = minOf(totalSplitters, 4)
+                repeat(displayCount) { index ->
                     Box(
                         modifier = Modifier
                             .size(40.dp)
@@ -786,7 +834,7 @@ private fun SplitAmountPreview(
                         }
                     }
                 }
-                if (numberOfPeople > 4) {
+                if (totalSplitters > 4) {
                     Box(
                         modifier = Modifier
                             .size(40.dp)
@@ -797,7 +845,7 @@ private fun SplitAmountPreview(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            "+${numberOfPeople - 4}",
+                            "+${totalSplitters - 4}",
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
                             fontSize = 12.sp
@@ -870,6 +918,51 @@ private fun DarkTextField(
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         minLines = minLines,
         singleLine = minLines == 1
+    )
+}
+
+@Composable
+private fun PaymentInputField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    onClear: () -> Unit,
+    placeholder: String,
+    keyboardType: KeyboardType,
+    enabled: Boolean
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = Modifier.fillMaxWidth(),
+        enabled = enabled,
+        placeholder = { Text(placeholder, color = TextGray.copy(alpha = 0.5f)) },
+        trailingIcon = {
+            if (value.isNotBlank()) {
+                IconButton(onClick = onClear) {
+                    Icon(
+                        Icons.Default.Clear,
+                        contentDescription = "Clear",
+                        tint = ErrorRed,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        },
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedTextColor = TextWhite,
+            unfocusedTextColor = TextWhite,
+            disabledTextColor = TextGray,
+            focusedBorderColor = BlobCyan.copy(alpha = 0.5f),
+            unfocusedBorderColor = TextGray.copy(alpha = 0.2f),
+            disabledBorderColor = TextGray.copy(alpha = 0.1f),
+            focusedContainerColor = CardGlass.copy(alpha = 0.3f),
+            unfocusedContainerColor = CardGlass.copy(alpha = 0.3f),
+            disabledContainerColor = CardGlass.copy(alpha = 0.15f),
+            cursorColor = BlobCyan
+        ),
+        shape = RoundedCornerShape(16.dp),
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+        singleLine = true
     )
 }
 
@@ -977,16 +1070,17 @@ private fun ParticipantChip(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(color.copy(alpha = 0.15f))
-            .padding(12.dp),
+            .clip(RoundedCornerShape(14.dp))
+            .background(color.copy(alpha = 0.12f))
+            .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // Avatar
         Box(
             modifier = Modifier
-                .size(40.dp)
+                .size(42.dp)
                 .clip(CircleShape)
-                .background(color.copy(alpha = 0.3f)),
+                .background(color.copy(alpha = 0.25f)),
             contentAlignment = Alignment.Center
         ) {
             Text(
@@ -1000,24 +1094,35 @@ private fun ParticipantChip(
 
         Spacer(modifier = Modifier.width(12.dp))
 
+        // Info - name on top, contact below (truncated)
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = participant.name.ifBlank { "Unknown" },
+                text = participant.name.ifBlank { "Contact" },
                 color = TextWhite,
-                fontWeight = FontWeight.Medium
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 15.sp,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )
+            Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = participant.contactValue,
                 color = TextGray,
-                fontSize = 12.sp
+                fontSize = 13.sp,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )
         }
 
-        IconButton(onClick = onRemove) {
+        // Remove button
+        IconButton(
+            onClick = onRemove,
+            modifier = Modifier.size(36.dp)
+        ) {
             Icon(
                 Icons.Default.Close,
                 contentDescription = "Remove",
-                tint = ErrorRed,
+                tint = ErrorRed.copy(alpha = 0.8f),
                 modifier = Modifier.size(20.dp)
             )
         }
@@ -1307,47 +1412,33 @@ private fun AddContactDialog(
     }
 }
 
-// Helper function for blob drawing
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawBlobShape(
+// Helper function for animated blob drawing
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawAnimatedBlob(
     center: Offset,
     baseRadius: Float,
-    phase: Float,
-    color: Color,
-    blobVariation: Float = 0.3f
+    morphPhase: Float,
+    color: Color
 ) {
     val path = Path()
-    val points = 6
-    val angleStep = 360f / points
+    val points = 80
 
     for (i in 0 until points) {
-        val angle = Math.toRadians((i * angleStep + phase).toDouble())
-        val variation = sin(angle * 2 + phase * 0.01) * baseRadius * blobVariation
-        val radius = baseRadius + variation.toFloat()
+        val angle = (i.toFloat() / points) * 2 * Math.PI
+
+        // Multiple harmonics for organic shape
+        val r1 = 1f + 0.2f * sin(angle * 2 + morphPhase).toFloat()
+        val r2 = 1f + 0.15f * cos(angle * 3 + morphPhase * 0.7f).toFloat()
+        val r3 = 1f + 0.1f * sin(angle * 4 + morphPhase * 1.3f).toFloat()
+
+        val radiusMod = (r1 * r2 * r3) * 0.85f
+        val radius = baseRadius * radiusMod
 
         val x = center.x + (radius * cos(angle)).toFloat()
         val y = center.y + (radius * sin(angle)).toFloat()
 
-        if (i == 0) {
-            path.moveTo(x, y)
-        } else {
-            val prevAngle = Math.toRadians(((i - 1) * angleStep + phase).toDouble())
-            val midAngle = Math.toRadians(((i - 0.5f) * angleStep + phase).toDouble())
-            val controlRadius = baseRadius * 1.15f
-            val controlX = center.x + (controlRadius * cos(midAngle)).toFloat()
-            val controlY = center.y + (controlRadius * sin(midAngle)).toFloat()
-            path.quadraticBezierTo(controlX, controlY, x, y)
-        }
+        if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
     }
 
-    // Close path
-    val firstAngle = Math.toRadians(phase.toDouble())
-    val lastMidAngle = Math.toRadians(((points - 0.5f) * angleStep + phase).toDouble())
-    val controlRadius = baseRadius * 1.15f
-    val controlX = center.x + (controlRadius * cos(lastMidAngle)).toFloat()
-    val controlY = center.y + (controlRadius * sin(lastMidAngle)).toFloat()
-    val firstX = center.x + (baseRadius * cos(firstAngle)).toFloat()
-    val firstY = center.y + (baseRadius * sin(firstAngle)).toFloat()
-    path.quadraticBezierTo(controlX, controlY, firstX, firstY)
     path.close()
 
     drawPath(path = path, color = color, style = Fill)
