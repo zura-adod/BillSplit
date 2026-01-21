@@ -4,30 +4,36 @@ import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
@@ -40,11 +46,12 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.mobelio.bill.split.domain.model.*
-import com.mobelio.bill.split.presentation.components.*
 import com.mobelio.bill.split.ui.theme.*
 import kotlinx.coroutines.flow.collectLatest
 import java.text.NumberFormat
 import java.util.Locale
+import kotlin.math.cos
+import kotlin.math.sin
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,6 +64,18 @@ fun CreateSplitScreen(
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
+
+    // Animation
+    val infiniteTransition = rememberInfiniteTransition(label = "blob_anim")
+    val blobPhase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(15000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "blob_phase"
+    )
 
     // Handle navigation
     LaunchedEffect(state.navigateToReview) {
@@ -73,12 +92,10 @@ fun CreateSplitScreen(
         }
     }
 
-    // Refresh participants when returning from contact picker
     LaunchedEffect(Unit) {
         viewModel.refreshParticipantsFromStateHolder()
     }
 
-    // Handle effects
     LaunchedEffect(Unit) {
         viewModel.effects.collectLatest { effect ->
             when (effect) {
@@ -99,96 +116,123 @@ fun CreateSplitScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        BackgroundLightStart,
-                        Color.White,
-                        BackgroundLightEnd
-                    )
-                )
-            )
+            .background(DarkBackground)
     ) {
-        // Background decorations
-        Box(
-            modifier = Modifier
-                .size(200.dp)
-                .offset(x = (-50).dp, y = 100.dp)
-                .blur(60.dp)
-                .background(GradientStart.copy(alpha = 0.1f), CircleShape)
-        )
-        Box(
-            modifier = Modifier
-                .size(150.dp)
-                .align(Alignment.TopEnd)
-                .offset(x = 50.dp, y = 200.dp)
-                .blur(50.dp)
-                .background(AccentPink.copy(alpha = 0.1f), CircleShape)
-        )
+        // Animated blob background
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val width = size.width
+            val height = size.height
+
+            // Top right pink blob
+            drawBlobShape(
+                center = Offset(width * 1.1f, height * 0.05f),
+                baseRadius = width * 0.4f,
+                phase = blobPhase,
+                color = BlobPink.copy(alpha = 0.6f)
+            )
+
+            // Bottom left purple blob
+            drawBlobShape(
+                center = Offset(width * -0.1f, height * 0.9f),
+                baseRadius = width * 0.35f,
+                phase = blobPhase * 0.8f,
+                color = BlobPurple.copy(alpha = 0.5f)
+            )
+        }
 
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
         ) {
-            // Top App Bar
-            TopAppBar(
-                title = {
-                    Text(
-                        "Create Split",
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimaryLight
+            // Top Bar
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onNavigateBack) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tint = TextWhite
                     )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = TextPrimaryLight
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent
+                }
+                Text(
+                    text = "Create Split",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextWhite,
+                    modifier = Modifier.weight(1f)
                 )
-            )
+            }
 
-            // Main content
+            // Main content with horizontal paging
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .weight(1f),
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp)
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
-                // Amount Section
+                // Amount Card
                 item {
-                    AmountSection(
-                        totalAmount = state.totalAmount,
-                        currency = state.currency,
-                        error = state.totalAmountError,
-                        onAmountChanged = { viewModel.onEvent(CreateSplitEvent.TotalAmountChanged(it)) },
-                        onCurrencyClick = { viewModel.onEvent(CreateSplitEvent.ShowCurrencyPicker) }
-                    )
+                    GlassCard {
+                        Column {
+                            CardHeader(
+                                icon = Icons.Outlined.Payments,
+                                title = "Amount",
+                                color = BlobPink
+                            )
+                            Spacer(modifier = Modifier.height(20.dp))
+                            AmountInput(
+                                amount = state.totalAmount,
+                                currency = state.currency,
+                                onAmountChange = { viewModel.onEvent(CreateSplitEvent.TotalAmountChanged(it)) },
+                                onCurrencyClick = { viewModel.onEvent(CreateSplitEvent.ShowCurrencyPicker) }
+                            )
+                        }
+                    }
                 }
 
-                // Split Configuration
+                // Split Config Card
                 item {
-                    SplitConfigSection(
-                        numberOfPeople = state.numberOfPeople,
-                        includeYourself = state.includeYourself,
-                        totalAmount = state.totalAmount.toDoubleOrNull() ?: 0.0,
-                        currency = state.currency,
-                        onPeopleCountClick = { viewModel.onEvent(CreateSplitEvent.ShowPeopleCountPicker) },
-                        onIncludeYourselfChanged = { viewModel.onEvent(CreateSplitEvent.IncludeYourselfChanged(it)) }
-                    )
+                    GlassCard {
+                        Column {
+                            CardHeader(
+                                icon = Icons.Outlined.Groups,
+                                title = "Split Between",
+                                color = BlobPurple
+                            )
+                            Spacer(modifier = Modifier.height(20.dp))
+
+                            // People count selector
+                            PeopleSelector(
+                                count = state.numberOfPeople,
+                                onCountChange = { viewModel.onEvent(CreateSplitEvent.NumberOfPeopleChanged(it)) }
+                            )
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            // Include yourself toggle
+                            ToggleOption(
+                                checked = state.includeYourself,
+                                onCheckedChange = { viewModel.onEvent(CreateSplitEvent.IncludeYourselfChanged(it)) },
+                                label = "Include myself in split",
+                                sublabel = if (state.includeYourself)
+                                    "Amount split among ${state.numberOfPeople} people (including you)"
+                                else
+                                    "Amount split among ${state.numberOfPeople} people (you don't pay)"
+                            )
+                        }
+                    }
                 }
 
-                // Split Preview
+                // Amount Preview
                 if (state.totalAmount.isNotEmpty() && state.numberOfPeople > 0) {
                     item {
-                        SplitPreviewCard(
+                        SplitAmountPreview(
                             totalAmount = state.totalAmount.toDoubleOrNull() ?: 0.0,
                             numberOfPeople = state.numberOfPeople,
                             includeYourself = state.includeYourself,
@@ -197,45 +241,164 @@ fun CreateSplitScreen(
                     }
                 }
 
-                // Payment Details
+                // Payment Details Card
                 item {
-                    PaymentSection(
-                        paymentType = state.paymentType,
-                        paymentValue = state.paymentValue,
-                        error = state.paymentValueError,
-                        onTypeChanged = { viewModel.onEvent(CreateSplitEvent.PaymentTypeChanged(it)) },
-                        onValueChanged = { viewModel.onEvent(CreateSplitEvent.PaymentValueChanged(it)) },
-                        onPaste = { viewModel.onEvent(CreateSplitEvent.PastePaymentValue) },
-                        onCopy = { viewModel.onEvent(CreateSplitEvent.CopyPaymentValue) }
-                    )
-                }
+                    GlassCard {
+                        Column {
+                            CardHeader(
+                                icon = Icons.Outlined.CreditCard,
+                                title = "Payment Details",
+                                color = BlobCyan
+                            )
+                            Spacer(modifier = Modifier.height(20.dp))
 
-                // Participants Section
-                item {
-                    ParticipantsSection(
-                        participants = state.participants,
-                        requiredCount = if (state.includeYourself) state.numberOfPeople - 1 else state.numberOfPeople,
-                        currency = state.currency,
-                        splitMode = state.splitMode,
-                        onAddFromContacts = { viewModel.onEvent(CreateSplitEvent.NavigateToContactPicker) },
-                        onAddPhone = { viewModel.onEvent(CreateSplitEvent.ShowAddPhoneDialog) },
-                        onAddEmail = { viewModel.onEvent(CreateSplitEvent.ShowAddEmailDialog) },
-                        onRemove = { viewModel.onEvent(CreateSplitEvent.RemoveParticipant(it)) },
-                        onAmountChanged = { id, amount ->
-                            viewModel.onEvent(CreateSplitEvent.ParticipantAmountChanged(id, amount))
+                            // Payment type toggle
+                            PaymentTypeToggle(
+                                selectedType = state.paymentType,
+                                onTypeChange = { viewModel.onEvent(CreateSplitEvent.PaymentTypeChanged(it)) }
+                            )
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            // Payment value input
+                            DarkTextField(
+                                value = state.paymentValue,
+                                onValueChange = { viewModel.onEvent(CreateSplitEvent.PaymentValueChanged(it)) },
+                                placeholder = if (state.paymentType == PaymentType.IBAN)
+                                    "GB82 WEST 1234 5698 7654 32" else "1234 5678 9012 3456",
+                                keyboardType = if (state.paymentType == PaymentType.CARD)
+                                    KeyboardType.Number else KeyboardType.Text
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                SmallActionButton(
+                                    text = "Paste",
+                                    icon = Icons.Outlined.ContentPaste,
+                                    color = BlobCyan,
+                                    onClick = { viewModel.onEvent(CreateSplitEvent.PastePaymentValue) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                SmallActionButton(
+                                    text = "Clear",
+                                    icon = Icons.Outlined.Clear,
+                                    color = ErrorRed,
+                                    onClick = { viewModel.onEvent(CreateSplitEvent.ClearPaymentValue) },
+                                    enabled = state.paymentValue.isNotBlank(),
+                                    modifier = Modifier.weight(1f)
+                                )
+                                SmallActionButton(
+                                    text = "Copy",
+                                    icon = Icons.Outlined.ContentCopy,
+                                    color = BlobPurple,
+                                    onClick = { viewModel.onEvent(CreateSplitEvent.CopyPaymentValue) },
+                                    enabled = state.paymentValue.isNotBlank(),
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
                         }
-                    )
+                    }
                 }
 
-                // Note
+                // Recipients Card - show required count based on include yourself
+                val requiredRecipients = if (state.includeYourself) state.numberOfPeople - 1 else state.numberOfPeople
+
+                // Recipients Card
                 item {
-                    NoteSection(
-                        note = state.note,
-                        onNoteChanged = { viewModel.onEvent(CreateSplitEvent.NoteChanged(it)) }
-                    )
+                    GlassCard {
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                CardHeader(
+                                    icon = Icons.Outlined.Send,
+                                    title = "Send To",
+                                    color = BlobYellow
+                                )
+                                if (requiredRecipients > 0) {
+                                    CountBadge(
+                                        current = state.participants.size,
+                                        total = requiredRecipients
+                                    )
+                                } else {
+                                    // When include yourself is checked and only 1 person
+                                    Text(
+                                        text = "Optional",
+                                        color = TextGray,
+                                        fontSize = 12.sp
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(20.dp))
+
+                            // Add recipient buttons
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                AddRecipientButton(
+                                    icon = Icons.Outlined.Contacts,
+                                    label = "Contacts",
+                                    color = BlobPurple,
+                                    onClick = { viewModel.onEvent(CreateSplitEvent.NavigateToContactPicker) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                AddRecipientButton(
+                                    icon = Icons.Outlined.Phone,
+                                    label = "Phone",
+                                    color = BlobCyan,
+                                    onClick = { viewModel.onEvent(CreateSplitEvent.ShowAddPhoneDialog) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                AddRecipientButton(
+                                    icon = Icons.Outlined.Email,
+                                    label = "Email",
+                                    color = BlobYellow,
+                                    onClick = { viewModel.onEvent(CreateSplitEvent.ShowAddEmailDialog) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+
+                            // Participants list
+                            if (state.participants.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(16.dp))
+                                state.participants.forEach { participant ->
+                                    ParticipantChip(
+                                        participant = participant,
+                                        onRemove = { viewModel.onEvent(CreateSplitEvent.RemoveParticipant(participant.id)) }
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                }
+                            }
+                        }
+                    }
                 }
 
-                item { Spacer(modifier = Modifier.height(100.dp)) }
+                // Note Card
+                item {
+                    GlassCard {
+                        Column {
+                            CardHeader(
+                                icon = Icons.Outlined.Notes,
+                                title = "Note",
+                                color = BlobPink
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            DarkTextField(
+                                value = state.note,
+                                onValueChange = { viewModel.onEvent(CreateSplitEvent.NoteChanged(it)) },
+                                placeholder = "What's this for? 🍕",
+                                minLines = 2
+                            )
+                        }
+                    }
+                }
+
+                item { Spacer(modifier = Modifier.height(80.dp)) }
             }
 
             // Bottom Action Button
@@ -246,28 +409,28 @@ fun CreateSplitScreen(
                         Brush.verticalGradient(
                             colors = listOf(
                                 Color.Transparent,
-                                Color.White
+                                DarkBackground.copy(alpha = 0.9f),
+                                DarkBackground
                             )
                         )
                     )
                     .padding(20.dp)
             ) {
-                GradientButton(
+                GradientActionButton(
                     text = "Review & Share",
                     onClick = { viewModel.onEvent(CreateSplitEvent.ProceedToReview) },
-                    icon = Icons.Default.ArrowForward,
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = state.participants.isNotEmpty() || state.includeYourself
+                    enabled = state.participants.isNotEmpty() || state.includeYourself,
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         }
     }
 
-    // Currency Picker Modal
+    // Modals
     if (state.showCurrencyPicker) {
-        CurrencyPickerModal(
+        CurrencyPickerSheet(
             selectedCurrency = state.currency,
-            onCurrencySelected = {
+            onSelect = {
                 viewModel.onEvent(CreateSplitEvent.CurrencyChanged(it))
                 viewModel.onEvent(CreateSplitEvent.HideCurrencyPicker)
             },
@@ -275,26 +438,12 @@ fun CreateSplitScreen(
         )
     }
 
-    // People Count Picker Modal
-    if (state.showPeopleCountPicker) {
-        PeopleCountPickerModal(
-            currentCount = state.numberOfPeople,
-            onCountSelected = {
-                viewModel.onEvent(CreateSplitEvent.NumberOfPeopleChanged(it))
-                viewModel.onEvent(CreateSplitEvent.HidePeopleCountPicker)
-            },
-            onDismiss = { viewModel.onEvent(CreateSplitEvent.HidePeopleCountPicker) }
-        )
-    }
-
-    // Add Phone Dialog
     if (state.showAddPhoneDialog) {
-        AddParticipantModal(
+        AddContactDialog(
             title = "Add by Phone",
             icon = Icons.Outlined.Phone,
-            color = AccentGreen,
-            contactLabel = "Phone Number",
-            contactPlaceholder = "+1 234 567 8900",
+            color = BlobCyan,
+            placeholder = "+1 234 567 8900",
             keyboardType = KeyboardType.Phone,
             onDismiss = { viewModel.onEvent(CreateSplitEvent.HideAddPhoneDialog) },
             onConfirm = { contact, name ->
@@ -303,14 +452,12 @@ fun CreateSplitScreen(
         )
     }
 
-    // Add Email Dialog
     if (state.showAddEmailDialog) {
-        AddParticipantModal(
+        AddContactDialog(
             title = "Add by Email",
             icon = Icons.Outlined.Email,
-            color = AccentOrange,
-            contactLabel = "Email Address",
-            contactPlaceholder = "email@example.com",
+            color = BlobYellow,
+            placeholder = "email@example.com",
             keyboardType = KeyboardType.Email,
             onDismiss = { viewModel.onEvent(CreateSplitEvent.HideAddEmailDialog) },
             onConfirm = { contact, name ->
@@ -319,7 +466,6 @@ fun CreateSplitScreen(
         )
     }
 
-    // Error snackbar
     state.errorMessage?.let { error ->
         LaunchedEffect(error) {
             Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
@@ -329,285 +475,332 @@ fun CreateSplitScreen(
 }
 
 @Composable
-private fun AmountSection(
-    totalAmount: String,
+private fun GlassCard(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(CardGlass.copy(alpha = 0.4f))
+            .border(
+                width = 1.dp,
+                color = TextWhite.copy(alpha = 0.1f),
+                shape = RoundedCornerShape(24.dp)
+            )
+            .padding(20.dp)
+    ) {
+        content()
+    }
+}
+
+@Composable
+private fun CardHeader(
+    icon: ImageVector,
+    title: String,
+    color: Color
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(color.copy(alpha = 0.2f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = color,
+                modifier = Modifier.size(22.dp)
+            )
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            text = title,
+            color = TextWhite,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 18.sp
+        )
+    }
+}
+
+@Composable
+private fun AmountInput(
+    amount: String,
     currency: Currency,
-    error: String?,
-    onAmountChanged: (String) -> Unit,
+    onAmountChange: (String) -> Unit,
     onCurrencyClick: () -> Unit
 ) {
-    AnimatedCard {
-        Column {
-            SectionHeader(
-                title = "Total Amount",
-                icon = Icons.Outlined.Payments,
-                color = GradientStart
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Currency selector
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(GradientStart.copy(alpha = 0.1f))
-                        .clickable { onCurrencyClick() }
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = currency.symbol,
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = GradientStart
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Icon(
-                            Icons.Default.ArrowDropDown,
-                            contentDescription = null,
-                            tint = GradientStart
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                // Amount input
-                OutlinedTextField(
-                    value = totalAmount,
-                    onValueChange = { newValue ->
-                        if (newValue.isEmpty() || newValue.matches(Regex("^\\d*\\.?\\d{0,2}$"))) {
-                            onAmountChanged(newValue)
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                    placeholder = {
-                        Text("0.00", color = TextSecondaryLight.copy(alpha = 0.5f))
-                    },
-                    textStyle = LocalTextStyle.current.copy(
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Bold
-                    ),
-                    isError = error != null,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = GradientStart,
-                        unfocusedBorderColor = Color.Transparent,
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent
-                    ),
-                    shape = RoundedCornerShape(16.dp)
-                )
-            }
-
-            if (error != null) {
-                Spacer(modifier = Modifier.height(4.dp))
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Currency button
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(16.dp))
+                .background(BlobPink.copy(alpha = 0.2f))
+                .clickable { onCurrencyClick() }
+                .padding(horizontal = 16.dp, vertical = 14.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = error,
-                    color = ErrorRed,
-                    fontSize = 12.sp
+                    text = currency.symbol,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = BlobPink
                 )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SplitConfigSection(
-    numberOfPeople: Int,
-    includeYourself: Boolean,
-    totalAmount: Double,
-    currency: Currency,
-    onPeopleCountClick: () -> Unit,
-    onIncludeYourselfChanged: (Boolean) -> Unit
-) {
-    AnimatedCard {
-        Column {
-            SectionHeader(
-                title = "Split Between",
-                icon = Icons.Outlined.Groups,
-                color = AccentPurple
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // People count selector
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Number of people",
-                    color = TextSecondaryLight,
-                    modifier = Modifier.weight(1f)
-                )
-
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(AccentPurple.copy(alpha = 0.1f))
-                        .clickable { onPeopleCountClick() }
-                        .padding(horizontal = 20.dp, vertical = 12.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "$numberOfPeople",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = AccentPurple
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Icon(
-                            Icons.Outlined.People,
-                            contentDescription = null,
-                            tint = AccentPurple,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Include yourself toggle
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(
-                        if (includeYourself) AccentGreen.copy(alpha = 0.1f)
-                        else Color.Gray.copy(alpha = 0.05f)
-                    )
-                    .clickable { onIncludeYourselfChanged(!includeYourself) }
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
                 Icon(
-                    if (includeYourself) Icons.Filled.CheckCircle else Icons.Outlined.Circle,
+                    Icons.Default.ArrowDropDown,
                     contentDescription = null,
-                    tint = if (includeYourself) AccentGreen else TextSecondaryLight,
-                    modifier = Modifier.size(24.dp)
+                    tint = BlobPink
                 )
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Include myself",
-                        fontWeight = FontWeight.Medium,
-                        color = if (includeYourself) AccentGreen else TextPrimaryLight
-                    )
-                    Text(
-                        text = "I'm also part of this split",
-                        fontSize = 12.sp,
-                        color = TextSecondaryLight
-                    )
+            }
+        }
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        // Amount input
+        BasicTextField(
+            value = amount,
+            onValueChange = { newValue ->
+                if (newValue.isEmpty() || newValue.matches(Regex("^\\d*\\.?\\d{0,2}$"))) {
+                    onAmountChange(newValue)
                 }
+            },
+            modifier = Modifier.weight(1f),
+            textStyle = LocalTextStyle.current.copy(
+                fontSize = 36.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextWhite
+            ),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            singleLine = true,
+            decorationBox = { innerTextField ->
+                Box {
+                    if (amount.isEmpty()) {
+                        Text(
+                            "0.00",
+                            fontSize = 36.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextGray.copy(alpha = 0.4f)
+                        )
+                    }
+                    innerTextField()
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun PeopleSelector(
+    count: Int,
+    onCountChange: (Int) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "Number of people",
+            color = TextGray,
+            fontSize = 14.sp
+        )
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            IconButton(
+                onClick = { if (count > 2) onCountChange(count - 1) },
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(CardGlass)
+            ) {
+                Icon(Icons.Default.Remove, contentDescription = "Decrease", tint = TextWhite)
+            }
+
+            Text(
+                text = "$count",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                color = BlobPurple,
+                modifier = Modifier.width(40.dp),
+                textAlign = TextAlign.Center
+            )
+
+            IconButton(
+                onClick = { if (count < 30) onCountChange(count + 1) },
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(CardGlass)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Increase", tint = TextWhite)
             }
         }
     }
 }
 
 @Composable
-private fun SplitPreviewCard(
+private fun ToggleOption(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    label: String,
+    sublabel: String
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(
+                if (checked) SuccessGreen.copy(alpha = 0.15f)
+                else CardGlass.copy(alpha = 0.5f)
+            )
+            .clickable { onCheckedChange(!checked) }
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(24.dp)
+                .clip(CircleShape)
+                .background(
+                    if (checked) SuccessGreen else TextGray.copy(alpha = 0.3f)
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            if (checked) {
+                Icon(
+                    Icons.Default.Check,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column {
+            Text(
+                text = label,
+                color = if (checked) SuccessGreen else TextWhite,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = sublabel,
+                color = TextGray,
+                fontSize = 12.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun SplitAmountPreview(
     totalAmount: Double,
     numberOfPeople: Int,
     includeYourself: Boolean,
     currency: Currency
 ) {
+    // If includeYourself is true, split among numberOfPeople (you + others)
+    // If false, split among numberOfPeople (all others, you're not paying)
     val perPerson = if (numberOfPeople > 0) totalAmount / numberOfPeople else 0.0
     val formatter = NumberFormat.getNumberInstance(Locale.US).apply {
         minimumFractionDigits = 2
         maximumFractionDigits = 2
     }
 
+    // Calculate how many recipients need to be added
+    val recipientsNeeded = if (includeYourself) numberOfPeople - 1 else numberOfPeople
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(
-                elevation = 20.dp,
-                shape = RoundedCornerShape(24.dp),
-                ambientColor = GradientStart.copy(alpha = 0.2f),
-                spotColor = GradientMiddle.copy(alpha = 0.2f)
-            )
             .clip(RoundedCornerShape(24.dp))
             .background(
                 Brush.horizontalGradient(
-                    colors = listOf(
-                        GradientStart,
-                        GradientMiddle,
-                        AccentPink
-                    )
+                    colors = listOf(BlobPink, BlobPurple, BlobCyan)
                 )
             )
             .padding(24.dp)
     ) {
-        Column {
-            Text(
-                text = "Each person pays",
-                color = Color.White.copy(alpha = 0.8f),
-                fontSize = 14.sp
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Row(verticalAlignment = Alignment.Bottom) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
                 Text(
-                    text = currency.symbol,
-                    color = Color.White,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold
+                    text = "Each person pays",
+                    color = Color.White.copy(alpha = 0.8f),
+                    fontSize = 14.sp
                 )
-                Text(
-                    text = formatter.format(perPerson),
-                    color = Color.White,
-                    fontSize = 40.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text(
+                        text = currency.symbol,
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = formatter.format(perPerson),
+                        color = Color.White,
+                        fontSize = 36.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
+            // People avatars
             Row {
-                repeat(minOf(numberOfPeople, 5)) { index ->
-                    val colors = listOf(AccentYellow, AccentGreen, AccentBlue, AccentOrange, AccentPink)
+                val colors = listOf(BlobYellow, BlobCyan, BlobPink, BlobPurple)
+                repeat(minOf(numberOfPeople, 4)) { index ->
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
-                            .offset(x = (-8 * index).dp)
+                            .size(40.dp)
+                            .offset(x = (-12 * index).dp)
                             .border(2.dp, Color.White, CircleShape)
                             .clip(CircleShape)
                             .background(colors[index % colors.size]),
                         contentAlignment = Alignment.Center
                     ) {
                         if (index == 0 && includeYourself) {
-                            Text("Me", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text(
+                                "You",
+                                color = Color.White,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         } else {
                             Icon(
                                 Icons.Default.Person,
                                 contentDescription = null,
                                 tint = Color.White,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }
                 }
-                if (numberOfPeople > 5) {
+                if (numberOfPeople > 4) {
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
-                            .offset(x = (-40).dp)
+                            .size(40.dp)
+                            .offset(x = (-48).dp)
                             .border(2.dp, Color.White, CircleShape)
                             .clip(CircleShape)
                             .background(Color.White.copy(alpha = 0.3f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            "+${numberOfPeople - 5}",
+                            "+${numberOfPeople - 4}",
                             color = Color.White,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
                         )
                     }
                 }
@@ -617,146 +810,71 @@ private fun SplitPreviewCard(
 }
 
 @Composable
-private fun PaymentSection(
-    paymentType: PaymentType,
-    paymentValue: String,
-    error: String?,
-    onTypeChanged: (PaymentType) -> Unit,
-    onValueChanged: (String) -> Unit,
-    onPaste: () -> Unit,
-    onCopy: () -> Unit
+private fun PaymentTypeToggle(
+    selectedType: PaymentType,
+    onTypeChange: (PaymentType) -> Unit
 ) {
-    AnimatedCard {
-        Column {
-            SectionHeader(
-                title = "Payment Details",
-                icon = Icons.Outlined.CreditCard,
-                color = AccentBlue
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Payment type tabs
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(Color.Gray.copy(alpha = 0.1f))
-                    .padding(4.dp)
-            ) {
-                PaymentTypeTab(
-                    text = "IBAN",
-                    icon = Icons.Outlined.AccountBalance,
-                    selected = paymentType == PaymentType.IBAN,
-                    onClick = { onTypeChanged(PaymentType.IBAN) },
-                    modifier = Modifier.weight(1f)
-                )
-                PaymentTypeTab(
-                    text = "Card",
-                    icon = Icons.Outlined.CreditCard,
-                    selected = paymentType == PaymentType.CARD,
-                    onClick = { onTypeChanged(PaymentType.CARD) },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            OutlinedTextField(
-                value = paymentValue,
-                onValueChange = onValueChanged,
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = {
-                    Text(
-                        if (paymentType == PaymentType.IBAN) "GB82 WEST 1234 5698 7654 32"
-                        else "1234 5678 9012 3456"
-                    )
-                },
-                isError = error != null,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = if (paymentType == PaymentType.CARD) KeyboardType.Number
-                    else KeyboardType.Text
-                ),
-                singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = AccentBlue,
-                    unfocusedBorderColor = Color.Gray.copy(alpha = 0.3f)
-                ),
-                shape = RoundedCornerShape(16.dp)
-            )
-
-            if (error != null) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(text = error, color = ErrorRed, fontSize = 12.sp)
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ActionChip(
-                    text = "Paste",
-                    icon = Icons.Outlined.ContentPaste,
-                    color = AccentBlue,
-                    onClick = onPaste,
-                    modifier = Modifier.weight(1f)
-                )
-                ActionChip(
-                    text = "Copy",
-                    icon = Icons.Outlined.ContentCopy,
-                    color = AccentPurple,
-                    onClick = onCopy,
-                    enabled = paymentValue.isNotBlank(),
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun PaymentTypeTab(
-    text: String,
-    icon: ImageVector,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val scale by animateFloatAsState(
-        targetValue = if (selected) 1f else 0.95f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-        label = "tab_scale"
-    )
-
-    Box(
-        modifier = modifier
-            .scale(scale)
-            .clip(RoundedCornerShape(12.dp))
-            .background(
-                if (selected) Color.White else Color.Transparent
-            )
-            .clickable { onClick() }
-            .padding(vertical = 12.dp),
-        contentAlignment = Alignment.Center
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(CardGlass.copy(alpha = 0.5f))
+            .padding(4.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                icon,
-                contentDescription = null,
-                tint = if (selected) AccentBlue else TextSecondaryLight,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = text,
-                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                color = if (selected) AccentBlue else TextSecondaryLight
-            )
+        listOf(PaymentType.IBAN to "IBAN", PaymentType.CARD to "Card").forEach { (type, label) ->
+            val selected = selectedType == type
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(
+                        if (selected) BlobCyan.copy(alpha = 0.3f) else Color.Transparent
+                    )
+                    .clickable { onTypeChange(type) }
+                    .padding(vertical = 12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = label,
+                    color = if (selected) BlobCyan else TextGray,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun ActionChip(
+private fun DarkTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    keyboardType: KeyboardType = KeyboardType.Text,
+    minLines: Int = 1
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = Modifier.fillMaxWidth(),
+        placeholder = { Text(placeholder, color = TextGray.copy(alpha = 0.5f)) },
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedTextColor = TextWhite,
+            unfocusedTextColor = TextWhite,
+            focusedBorderColor = BlobCyan.copy(alpha = 0.5f),
+            unfocusedBorderColor = TextGray.copy(alpha = 0.2f),
+            focusedContainerColor = CardGlass.copy(alpha = 0.3f),
+            unfocusedContainerColor = CardGlass.copy(alpha = 0.3f),
+            cursorColor = BlobCyan
+        ),
+        shape = RoundedCornerShape(16.dp),
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+        minLines = minLines,
+        singleLine = minLines == 1
+    )
+}
+
+@Composable
+private fun SmallActionButton(
     text: String,
     icon: ImageVector,
     color: Color,
@@ -768,8 +886,7 @@ private fun ActionChip(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
             .background(
-                if (enabled) color.copy(alpha = 0.1f)
-                else Color.Gray.copy(alpha = 0.1f)
+                if (enabled) color.copy(alpha = 0.2f) else CardGlass.copy(alpha = 0.3f)
             )
             .clickable(enabled = enabled) { onClick() }
             .padding(vertical = 12.dp),
@@ -779,135 +896,57 @@ private fun ActionChip(
             Icon(
                 icon,
                 contentDescription = null,
-                tint = if (enabled) color else TextSecondaryLight,
+                tint = if (enabled) color else TextGray,
                 modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = text,
+                color = if (enabled) color else TextGray,
                 fontWeight = FontWeight.Medium,
-                color = if (enabled) color else TextSecondaryLight
+                fontSize = 14.sp
             )
         }
     }
 }
 
 @Composable
-private fun ParticipantsSection(
-    participants: List<Participant>,
-    requiredCount: Int,
-    currency: Currency,
-    splitMode: SplitMode,
-    onAddFromContacts: () -> Unit,
-    onAddPhone: () -> Unit,
-    onAddEmail: () -> Unit,
-    onRemove: (String) -> Unit,
-    onAmountChanged: (String, String) -> Unit
+private fun CountBadge(
+    current: Int,
+    total: Int
 ) {
-    AnimatedCard {
-        Column {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                SectionHeader(
-                    title = "Send Request To",
-                    icon = Icons.Outlined.Send,
-                    color = AccentOrange,
-                    modifier = Modifier.weight(1f)
-                )
-                if (requiredCount > 0) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(
-                                if (participants.size >= requiredCount) AccentGreen.copy(alpha = 0.2f)
-                                else AccentOrange.copy(alpha = 0.2f)
-                            )
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = "${participants.size}/$requiredCount",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (participants.size >= requiredCount) AccentGreen else AccentOrange
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Add buttons
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                AddButton(
-                    text = "Contacts",
-                    icon = Icons.Outlined.Contacts,
-                    color = AccentPurple,
-                    onClick = onAddFromContacts,
-                    modifier = Modifier.weight(1f)
-                )
-                AddButton(
-                    text = "Phone",
-                    icon = Icons.Outlined.Phone,
-                    color = AccentGreen,
-                    onClick = onAddPhone,
-                    modifier = Modifier.weight(1f)
-                )
-                AddButton(
-                    text = "Email",
-                    icon = Icons.Outlined.Email,
-                    color = AccentOrange,
-                    onClick = onAddEmail,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            if (participants.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(16.dp))
-
-                participants.forEach { participant ->
-                    ParticipantCard(
-                        participant = participant,
-                        currency = currency,
-                        showAmountInput = splitMode == SplitMode.MANUAL,
-                        onRemove = { onRemove(participant.id) },
-                        onAmountChanged = { onAmountChanged(participant.id, it) }
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                }
-            }
-        }
+    val complete = current >= total
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(
+                if (complete) SuccessGreen.copy(alpha = 0.2f)
+                else BlobYellow.copy(alpha = 0.2f)
+            )
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+    ) {
+        Text(
+            text = "$current / $total",
+            color = if (complete) SuccessGreen else BlobYellow,
+            fontWeight = FontWeight.Bold,
+            fontSize = 12.sp
+        )
     }
 }
 
 @Composable
-private fun AddButton(
-    text: String,
+private fun AddRecipientButton(
     icon: ImageVector,
+    label: String,
     color: Color,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var isPressed by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-        label = "add_btn_scale"
-    )
-
     Column(
         modifier = modifier
-            .scale(scale)
             .clip(RoundedCornerShape(16.dp))
-            .background(color.copy(alpha = 0.1f))
-            .clickable {
-                isPressed = true
-                onClick()
-            }
+            .background(color.copy(alpha = 0.15f))
+            .clickable { onClick() }
             .padding(vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -915,15 +954,126 @@ private fun AddButton(
             icon,
             contentDescription = null,
             tint = color,
-            modifier = Modifier.size(24.dp)
+            modifier = Modifier.size(28.dp)
         )
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = text,
+            text = label,
+            color = color,
             fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            color = color
+            fontWeight = FontWeight.Medium
         )
+    }
+}
+
+@Composable
+private fun ParticipantChip(
+    participant: Participant,
+    onRemove: () -> Unit
+) {
+    val colors = listOf(BlobPink, BlobPurple, BlobCyan, BlobYellow)
+    val color = colors[participant.id.hashCode().mod(colors.size).let { if (it < 0) -it else it }]
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(color.copy(alpha = 0.15f))
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(color.copy(alpha = 0.3f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = (participant.name.firstOrNull() ?: participant.contactValue.firstOrNull() ?: '?')
+                    .uppercase().toString(),
+                color = color,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp
+            )
+        }
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = participant.name.ifBlank { "Unknown" },
+                color = TextWhite,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = participant.contactValue,
+                color = TextGray,
+                fontSize = 12.sp
+            )
+        }
+
+        IconButton(onClick = onRemove) {
+            Icon(
+                Icons.Default.Close,
+                contentDescription = "Remove",
+                tint = ErrorRed,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun GradientActionButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
+) {
+    var isPressed by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.96f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "button_scale"
+    )
+
+    Box(
+        modifier = modifier
+            .scale(scale)
+            .height(60.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(
+                if (enabled) {
+                    Brush.horizontalGradient(
+                        colors = listOf(BlobPink, BlobPurple, BlobCyan)
+                    )
+                } else {
+                    Brush.horizontalGradient(
+                        colors = listOf(CardGlass, CardGlass)
+                    )
+                }
+            )
+            .clickable(enabled = enabled) {
+                isPressed = true
+                onClick()
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = text,
+                color = if (enabled) Color.White else TextGray,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Icon(
+                Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = null,
+                tint = if (enabled) Color.White else TextGray
+            )
+        }
     }
 
     LaunchedEffect(isPressed) {
@@ -934,120 +1084,11 @@ private fun AddButton(
     }
 }
 
+// Currency Picker Sheet
 @Composable
-private fun ParticipantCard(
-    participant: Participant,
-    currency: Currency,
-    showAmountInput: Boolean,
-    onRemove: () -> Unit,
-    onAmountChanged: (String) -> Unit
-) {
-    val colors = listOf(AccentPurple, AccentGreen, AccentOrange, AccentBlue, AccentPink)
-    val color = colors[participant.id.hashCode().mod(colors.size).let { if (it < 0) -it else it }]
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(color.copy(alpha = 0.08f))
-            .padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Avatar
-        Box(
-            modifier = Modifier
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(color.copy(alpha = 0.2f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = (participant.name.firstOrNull() ?: participant.contactValue.firstOrNull() ?: '?').uppercase().toString(),
-                color = color,
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp
-            )
-        }
-
-        Spacer(modifier = Modifier.width(12.dp))
-
-        // Info
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = participant.name.ifBlank { "Unknown" },
-                fontWeight = FontWeight.SemiBold,
-                color = TextPrimaryLight
-            )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    if (participant.contactMethod == ContactMethod.PHONE)
-                        Icons.Outlined.Phone else Icons.Outlined.Email,
-                    contentDescription = null,
-                    tint = TextSecondaryLight,
-                    modifier = Modifier.size(12.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = participant.contactValue,
-                    fontSize = 12.sp,
-                    color = TextSecondaryLight
-                )
-            }
-        }
-
-        // Remove button
-        IconButton(
-            onClick = onRemove,
-            modifier = Modifier.size(32.dp)
-        ) {
-            Icon(
-                Icons.Outlined.Close,
-                contentDescription = "Remove",
-                tint = ErrorRed,
-                modifier = Modifier.size(18.dp)
-            )
-        }
-    }
-}
-
-@Composable
-private fun NoteSection(
-    note: String,
-    onNoteChanged: (String) -> Unit
-) {
-    AnimatedCard {
-        Column {
-            SectionHeader(
-                title = "Note (Optional)",
-                icon = Icons.Outlined.Notes,
-                color = AccentPink
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            OutlinedTextField(
-                value = note,
-                onValueChange = onNoteChanged,
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("e.g., Dinner at restaurant 🍕") },
-                minLines = 2,
-                maxLines = 3,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = AccentPink,
-                    unfocusedBorderColor = Color.Gray.copy(alpha = 0.3f)
-                ),
-                shape = RoundedCornerShape(16.dp)
-            )
-        }
-    }
-}
-
-// MODALS
-
-@Composable
-private fun CurrencyPickerModal(
+private fun CurrencyPickerSheet(
     selectedCurrency: Currency,
-    onCurrencySelected: (Currency) -> Unit,
+    onSelect: (Currency) -> Unit,
     onDismiss: () -> Unit
 ) {
     Dialog(
@@ -1057,7 +1098,7 @@ private fun CurrencyPickerModal(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.5f))
+                .background(Color.Black.copy(alpha = 0.7f))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null
@@ -1068,7 +1109,7 @@ private fun CurrencyPickerModal(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
-                    .background(Color.White)
+                    .background(DarkSurface)
                     .clickable(enabled = false) { }
                     .padding(24.dp)
             ) {
@@ -1079,228 +1120,90 @@ private fun CurrencyPickerModal(
                         .width(40.dp)
                         .height(4.dp)
                         .clip(RoundedCornerShape(2.dp))
-                        .background(Color.Gray.copy(alpha = 0.3f))
+                        .background(TextGray.copy(alpha = 0.3f))
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))
 
                 Text(
                     text = "Select Currency",
-                    style = MaterialTheme.typography.headlineSmall,
+                    color = TextWhite,
+                    fontSize = 22.sp,
                     fontWeight = FontWeight.Bold
                 )
 
                 Spacer(modifier = Modifier.height(20.dp))
 
                 Currency.entries.forEach { currency ->
-                    CurrencyItem(
-                        currency = currency,
-                        selected = currency == selectedCurrency,
-                        onClick = { onCurrencySelected(currency) }
-                    )
-                    if (currency != Currency.entries.last()) {
-                        Spacer(modifier = Modifier.height(8.dp))
+                    val selected = currency == selectedCurrency
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(
+                                if (selected) BlobPink.copy(alpha = 0.2f)
+                                else Color.Transparent
+                            )
+                            .clickable { onSelect(currency) }
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (selected) BlobPink else CardGlass
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = currency.symbol,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (selected) Color.White else TextWhite
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(16.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = currency.code,
+                                color = if (selected) BlobPink else TextWhite,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = currency.displayName,
+                                color = TextGray,
+                                fontSize = 12.sp
+                            )
+                        }
+
+                        if (selected) {
+                            Icon(
+                                Icons.Default.Check,
+                                contentDescription = null,
+                                tint = BlobPink
+                            )
+                        }
                     }
+                    Spacer(modifier = Modifier.height(4.dp))
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }
 }
 
+// Add Contact Dialog
 @Composable
-private fun CurrencyItem(
-    currency: Currency,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    val scale by animateFloatAsState(
-        targetValue = if (selected) 1.02f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-        label = "currency_scale"
-    )
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .scale(scale)
-            .clip(RoundedCornerShape(16.dp))
-            .background(
-                if (selected) GradientStart.copy(alpha = 0.1f)
-                else Color.Gray.copy(alpha = 0.05f)
-            )
-            .border(
-                width = if (selected) 2.dp else 0.dp,
-                color = if (selected) GradientStart else Color.Transparent,
-                shape = RoundedCornerShape(16.dp)
-            )
-            .clickable { onClick() }
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .clip(CircleShape)
-                .background(
-                    if (selected) GradientStart else Color.Gray.copy(alpha = 0.1f)
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = currency.symbol,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (selected) Color.White else TextPrimaryLight
-            )
-        }
-
-        Spacer(modifier = Modifier.width(16.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = currency.code,
-                fontWeight = FontWeight.Bold,
-                color = if (selected) GradientStart else TextPrimaryLight
-            )
-            Text(
-                text = currency.name,
-                fontSize = 12.sp,
-                color = TextSecondaryLight
-            )
-        }
-
-        if (selected) {
-            Icon(
-                Icons.Filled.CheckCircle,
-                contentDescription = null,
-                tint = GradientStart
-            )
-        }
-    }
-}
-
-@Composable
-private fun PeopleCountPickerModal(
-    currentCount: Int,
-    onCountSelected: (Int) -> Unit,
-    onDismiss: () -> Unit
-) {
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.5f))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) { onDismiss() },
-            contentAlignment = Alignment.BottomCenter
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
-                    .background(Color.White)
-                    .clickable(enabled = false) { }
-                    .padding(24.dp)
-            ) {
-                // Handle
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.CenterHorizontally)
-                        .width(40.dp)
-                        .height(4.dp)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(Color.Gray.copy(alpha = 0.3f))
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Text(
-                    text = "Number of People",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                // Grid of numbers
-                val numbers = (2..10).toList()
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(numbers) { number ->
-                        NumberCircle(
-                            number = number,
-                            selected = number == currentCount,
-                            onClick = { onCountSelected(number) }
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-            }
-        }
-    }
-}
-
-@Composable
-private fun NumberCircle(
-    number: Int,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    val scale by animateFloatAsState(
-        targetValue = if (selected) 1.1f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-        label = "number_scale"
-    )
-
-    val colors = listOf(AccentPurple, AccentGreen, AccentOrange, AccentBlue, AccentPink, GradientStart, AccentYellow, ErrorRed, GradientMiddle)
-    val color = colors[(number - 2) % colors.size]
-
-    Box(
-        modifier = Modifier
-            .size(60.dp)
-            .scale(scale)
-            .shadow(
-                elevation = if (selected) 12.dp else 4.dp,
-                shape = CircleShape,
-                ambientColor = color.copy(alpha = 0.3f)
-            )
-            .clip(CircleShape)
-            .background(
-                if (selected) color else Color.White
-            )
-            .border(
-                width = if (selected) 0.dp else 2.dp,
-                color = if (selected) Color.Transparent else color.copy(alpha = 0.3f),
-                shape = CircleShape
-            )
-            .clickable { onClick() },
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = "$number",
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold,
-            color = if (selected) Color.White else color
-        )
-    }
-}
-
-@Composable
-private fun AddParticipantModal(
+private fun AddContactDialog(
     title: String,
     icon: ImageVector,
     color: Color,
-    contactLabel: String,
-    contactPlaceholder: String,
+    placeholder: String,
     keyboardType: KeyboardType,
     onDismiss: () -> Unit,
     onConfirm: (contact: String, name: String) -> Unit
@@ -1315,7 +1218,7 @@ private fun AddParticipantModal(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.5f))
+                .background(Color.Black.copy(alpha = 0.7f))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null
@@ -1327,7 +1230,7 @@ private fun AddParticipantModal(
                     .fillMaxWidth()
                     .padding(24.dp)
                     .clip(RoundedCornerShape(32.dp))
-                    .background(Color.White)
+                    .background(DarkSurface)
                     .clickable(enabled = false) { }
                     .padding(24.dp)
             ) {
@@ -1337,62 +1240,39 @@ private fun AddParticipantModal(
                         modifier = Modifier
                             .size(48.dp)
                             .clip(CircleShape)
-                            .background(color.copy(alpha = 0.15f)),
+                            .background(color.copy(alpha = 0.2f)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            icon,
-                            contentDescription = null,
-                            tint = color,
-                            modifier = Modifier.size(24.dp)
-                        )
+                        Icon(icon, contentDescription = null, tint = color)
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
                         text = title,
-                        style = MaterialTheme.typography.titleLarge,
+                        color = TextWhite,
+                        fontSize = 20.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Contact input
-                OutlinedTextField(
+                DarkTextField(
                     value = contact,
                     onValueChange = { contact = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(contactLabel) },
-                    placeholder = { Text(contactPlaceholder) },
-                    keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = color,
-                        focusedLabelColor = color
-                    ),
-                    shape = RoundedCornerShape(16.dp)
+                    placeholder = placeholder,
+                    keyboardType = keyboardType
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Name input
-                OutlinedTextField(
+                DarkTextField(
                     value = name,
                     onValueChange = { name = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Name (Optional)") },
-                    placeholder = { Text("e.g., John") },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = color,
-                        focusedLabelColor = color
-                    ),
-                    shape = RoundedCornerShape(16.dp)
+                    placeholder = "Name (optional)"
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -1400,7 +1280,11 @@ private fun AddParticipantModal(
                     OutlinedButton(
                         onClick = onDismiss,
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(16.dp)
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = TextWhite
+                        ),
+                        border = BorderStroke(1.dp, TextGray.copy(alpha = 0.3f))
                     ) {
                         Text("Cancel")
                     }
@@ -1411,14 +1295,61 @@ private fun AddParticipantModal(
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = color
+                            containerColor = color,
+                            disabledContainerColor = CardGlass
                         )
                     ) {
-                        Text("Add")
+                        Text("Add", color = if (contact.isNotBlank()) Color.White else TextGray)
                     }
                 }
             }
         }
     }
+}
+
+// Helper function for blob drawing
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawBlobShape(
+    center: Offset,
+    baseRadius: Float,
+    phase: Float,
+    color: Color,
+    blobVariation: Float = 0.3f
+) {
+    val path = Path()
+    val points = 6
+    val angleStep = 360f / points
+
+    for (i in 0 until points) {
+        val angle = Math.toRadians((i * angleStep + phase).toDouble())
+        val variation = sin(angle * 2 + phase * 0.01) * baseRadius * blobVariation
+        val radius = baseRadius + variation.toFloat()
+
+        val x = center.x + (radius * cos(angle)).toFloat()
+        val y = center.y + (radius * sin(angle)).toFloat()
+
+        if (i == 0) {
+            path.moveTo(x, y)
+        } else {
+            val prevAngle = Math.toRadians(((i - 1) * angleStep + phase).toDouble())
+            val midAngle = Math.toRadians(((i - 0.5f) * angleStep + phase).toDouble())
+            val controlRadius = baseRadius * 1.15f
+            val controlX = center.x + (controlRadius * cos(midAngle)).toFloat()
+            val controlY = center.y + (controlRadius * sin(midAngle)).toFloat()
+            path.quadraticBezierTo(controlX, controlY, x, y)
+        }
+    }
+
+    // Close path
+    val firstAngle = Math.toRadians(phase.toDouble())
+    val lastMidAngle = Math.toRadians(((points - 0.5f) * angleStep + phase).toDouble())
+    val controlRadius = baseRadius * 1.15f
+    val controlX = center.x + (controlRadius * cos(lastMidAngle)).toFloat()
+    val controlY = center.y + (controlRadius * sin(lastMidAngle)).toFloat()
+    val firstX = center.x + (baseRadius * cos(firstAngle)).toFloat()
+    val firstY = center.y + (baseRadius * sin(firstAngle)).toFloat()
+    path.quadraticBezierTo(controlX, controlY, firstX, firstY)
+    path.close()
+
+    drawPath(path = path, color = color, style = Fill)
 }
 

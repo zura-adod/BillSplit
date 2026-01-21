@@ -88,6 +88,7 @@ sealed interface CreateSplitEvent {
 
     data object PastePaymentValue : CreateSplitEvent
     data object CopyPaymentValue : CreateSplitEvent
+    data object ClearPaymentValue : CreateSplitEvent
 
     // Step navigation
     data object NextStep : CreateSplitEvent

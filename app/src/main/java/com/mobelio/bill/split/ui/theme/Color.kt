@@ -2,52 +2,63 @@ package com.mobelio.bill.split.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Vibrant Gradient Colors - Primary Palette
-val GradientStart = Color(0xFF667EEA)      // Purple Blue
-val GradientMiddle = Color(0xFF764BA2)      // Purple
-val GradientEnd = Color(0xFFF093FB)         // Pink
+// Dark Theme Base Colors
+val DarkBackground = Color(0xFF0D0D0D)
+val DarkSurface = Color(0xFF1A1A2E)
+val DarkCard = Color(0xFF16213E)
 
-// Accent Colors - Vibrant & Energetic
-val AccentOrange = Color(0xFFFF6B6B)        // Coral Red
-val AccentYellow = Color(0xFFFFE66D)        // Sunny Yellow
-val AccentGreen = Color(0xFF4ECDC4)         // Turquoise
-val AccentPurple = Color(0xFFA855F7)        // Vivid Purple
-val AccentPink = Color(0xFFF472B6)          // Hot Pink
-val AccentBlue = Color(0xFF3B82F6)          // Electric Blue
+// Vibrant Blob Colors - Organic Shapes
+val BlobPink = Color(0xFFFF2D6A)       // Hot Pink / Magenta
+val BlobPurple = Color(0xFF7B2DFF)     // Electric Purple
+val BlobYellow = Color(0xFFFFB830)     // Warm Yellow/Orange
+val BlobCyan = Color(0xFF00D9FF)       // Cyan / Turquoise
+val BlobBlue = Color(0xFF4361EE)       // Royal Blue
 
-// Card & Surface Colors
-val CardLight = Color(0xFFFFFFFF)
-val CardDark = Color(0xFF1E1E2E)
-val SurfaceLight = Color(0xFFF8FAFC)
-val SurfaceDark = Color(0xFF0F0F1A)
-
-// Background Gradients
-val BackgroundLightStart = Color(0xFFF0F4FF)
-val BackgroundLightEnd = Color(0xFFFFF0F5)
-val BackgroundDarkStart = Color(0xFF1A1A2E)
-val BackgroundDarkEnd = Color(0xFF16213E)
+// Accent Colors
+val AccentPink = Color(0xFFFF2D6A)
+val AccentPurple = Color(0xFF7B2DFF)
+val AccentYellow = Color(0xFFFFB830)
+val AccentCyan = Color(0xFF00D9FF)
+val AccentOrange = Color(0xFFFF6B35)
+val AccentGreen = Color(0xFF00E676)
+val AccentBlue = Color(0xFF4361EE)
 
 // Text Colors
-val TextPrimaryLight = Color(0xFF1F2937)
-val TextSecondaryLight = Color(0xFF6B7280)
-val TextPrimaryDark = Color(0xFFF9FAFB)
-val TextSecondaryDark = Color(0xFF9CA3AF)
+val TextWhite = Color(0xFFFFFFFF)
+val TextGray = Color(0xFFB0B0B0)
+val TextMuted = Color(0xFF6B6B6B)
+
+// Card Colors
+val CardDark = Color(0xFF1E1E2E)
+val CardLight = Color(0xFFFFFFFF)
+val CardGlass = Color(0xFF2A2A3E)
 
 // Status Colors
-val SuccessGreen = Color(0xFF10B981)
-val WarningOrange = Color(0xFFF59E0B)
-val ErrorRed = Color(0xFFEF4444)
+val SuccessGreen = Color(0xFF00E676)
+val WarningOrange = Color(0xFFFFB830)
+val ErrorRed = Color(0xFFFF4757)
 
 // Share Channel Colors
 val WhatsAppGreen = Color(0xFF25D366)
 val ViberPurple = Color(0xFF7360F2)
-val SmsBlue = Color(0xFF3B82F6)
-val EmailRed = Color(0xFFEA4335)
+val SmsBlue = Color(0xFF4361EE)
+val EmailRed = Color(0xFFFF2D6A)
 
 // Legacy compatibility
-val Purple80 = GradientStart
-val PurpleGrey80 = GradientMiddle
-val Pink80 = GradientEnd
-val Purple40 = GradientStart
-val PurpleGrey40 = GradientMiddle
-val Pink40 = AccentPink
+val Purple80 = BlobPurple
+val PurpleGrey80 = BlobCyan
+val Pink80 = BlobPink
+val Purple40 = BlobPurple
+val PurpleGrey40 = BlobCyan
+val Pink40 = BlobPink
+
+// Gradient Start/End for legacy
+val GradientStart = BlobPurple
+val GradientMiddle = BlobPink
+val GradientEnd = BlobYellow
+val BackgroundLightStart = DarkBackground
+val BackgroundLightEnd = DarkSurface
+val TextPrimaryLight = TextWhite
+val TextSecondaryLight = TextGray
+val SurfaceLight = DarkSurface
+val SurfaceDark = DarkBackground

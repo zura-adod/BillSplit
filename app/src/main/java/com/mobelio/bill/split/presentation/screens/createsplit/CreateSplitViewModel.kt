@@ -164,6 +164,11 @@ class CreateSplitViewModel @Inject constructor(
                 }
             }
 
+            CreateSplitEvent.ClearPaymentValue -> {
+                _state.update { it.copy(paymentValue = "", paymentValueError = null) }
+                billSplitStateHolder.updatePaymentValue("")
+            }
+
             CreateSplitEvent.NextStep -> {
                 val currentStep = _state.value.currentStep
                 if (currentStep < 3) {
@@ -337,10 +342,16 @@ class CreateSplitViewModel @Inject constructor(
             hasError = true
         }
 
-        // Validate we have recipients
+        // Validate we have the correct number of recipients
         val requiredRecipients = if (currentState.includeYourself) currentState.numberOfPeople - 1 else currentState.numberOfPeople
+
         if (requiredRecipients > 0 && currentState.participants.isEmpty()) {
             _state.update { it.copy(errorMessage = "Please add at least one recipient to send the request") }
+            hasError = true
+        } else if (requiredRecipients > 0 && currentState.participants.size < requiredRecipients) {
+            _state.update {
+                it.copy(errorMessage = "Please add ${requiredRecipients - currentState.participants.size} more recipient(s). You selected $requiredRecipients people to send to.")
+            }
             hasError = true
         }
 
@@ -368,9 +379,10 @@ class CreateSplitViewModel @Inject constructor(
                 )
             )
             billSplitStateHolder.updateTotalAmount(total)
+            billSplitStateHolder.updateNote(currentState.note)
+            billSplitStateHolder.updateCurrency(currentState.currency)
 
             _state.update { it.copy(navigateToReview = true) }
         }
     }
 }
-
