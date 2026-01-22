@@ -217,7 +217,8 @@ fun ReviewShareScreen(
                                 val phoneParticipants = state.billSplit.participants.filter { it.contactMethod == ContactMethod.PHONE }
                                 if (phoneParticipants.isNotEmpty()) {
                                     val phones = phoneParticipants.joinToString(";") { it.contactValue }
-                                    val message = viewModel.generateCombinedMessage()
+                                    // Use phone-only message
+                                    val message = viewModel.generatePhoneOnlyMessage()
                                     val intent = Intent(Intent.ACTION_SENDTO).apply {
                                         data = Uri.parse("smsto:$phones")
                                         putExtra("sms_body", message)
@@ -232,7 +233,8 @@ fun ReviewShareScreen(
                                 val emailParticipants = state.billSplit.participants.filter { it.contactMethod == ContactMethod.EMAIL }
                                 if (emailParticipants.isNotEmpty()) {
                                     val emails = emailParticipants.map { it.contactValue }.toTypedArray()
-                                    val message = viewModel.generateCombinedMessage()
+                                    // Use email-only message
+                                    val message = viewModel.generateEmailOnlyMessage()
                                     val intent = Intent(Intent.ACTION_SEND).apply {
                                         type = "message/rfc822"
                                         putExtra(Intent.EXTRA_EMAIL, emails)
@@ -245,7 +247,6 @@ fun ReviewShareScreen(
                                     Toast.makeText(context, "No email recipients", Toast.LENGTH_SHORT).show()
                                 }
                             },
-                            onShareAll = { viewModel.onEvent(ReviewShareEvent.ShareAll) },
                             onCopyAll = { viewModel.onEvent(ReviewShareEvent.CopyAll) }
                         )
                     }
@@ -374,34 +375,22 @@ private fun QuickActionsRow(
     participants: List<Participant>,
     onShareAllSms: () -> Unit,
     onShareAllEmail: () -> Unit,
-    onShareAll: () -> Unit,
     onCopyAll: () -> Unit
 ) {
     val hasPhone = participants.any { it.contactMethod == ContactMethod.PHONE }
     val hasEmail = participants.any { it.contactMethod == ContactMethod.EMAIL }
-    val allPhone = participants.all { it.contactMethod == ContactMethod.PHONE }
-    val allEmail = participants.all { it.contactMethod == ContactMethod.EMAIL }
 
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (allPhone && hasPhone) {
-                ActionButton(Icons.Outlined.Sms, "SMS All", SmsBlue, onShareAllSms, Modifier.weight(1f))
-            }
-            if (allEmail && hasEmail) {
-                ActionButton(Icons.Outlined.Email, "Email All", EmailRed, onShareAllEmail, Modifier.weight(1f))
-            }
-            if (!allPhone && !allEmail) {
-                ActionButton(Icons.Outlined.Share, "Share All", BlobPink, onShareAll, Modifier.weight(1f))
-            }
-            ActionButton(Icons.Outlined.ContentCopy, "Copy All", BlobPurple, onCopyAll, Modifier.weight(1f))
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        // Show SMS All only if there are phone recipients
+        if (hasPhone) {
+            ActionButton(Icons.Outlined.Sms, "SMS All", SmsBlue, onShareAllSms, Modifier.weight(1f))
         }
-
-        if (hasPhone && hasEmail && !allPhone && !allEmail) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                ActionButton(Icons.Outlined.Sms, "SMS Phones", SmsBlue, onShareAllSms, Modifier.weight(1f))
-                ActionButton(Icons.Outlined.Email, "Email All", EmailRed, onShareAllEmail, Modifier.weight(1f))
-            }
+        // Show Email All only if there are email recipients
+        if (hasEmail) {
+            ActionButton(Icons.Outlined.Email, "Email All", EmailRed, onShareAllEmail, Modifier.weight(1f))
         }
+        // Always show Copy All
+        ActionButton(Icons.Outlined.ContentCopy, "Copy All", BlobPurple, onCopyAll, Modifier.weight(1f))
     }
 }
 

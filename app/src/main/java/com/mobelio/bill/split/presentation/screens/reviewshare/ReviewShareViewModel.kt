@@ -175,4 +175,38 @@ class ReviewShareViewModel @Inject constructor(
             note = currentState.billSplit.note
         )
     }
+
+    /**
+     * Generate message for phone recipients only (SMS All)
+     */
+    fun generatePhoneOnlyMessage(): String {
+        val currentState = _state.value
+        val phoneParticipants = currentState.billSplit.participants.filter {
+            it.contactMethod == ContactMethod.PHONE
+        }
+        return generateMessageUseCase.generateCombinedMessage(
+            participants = phoneParticipants,
+            paymentDetails = currentState.billSplit.paymentDetails,
+            currency = currentState.billSplit.currency,
+            totalAmount = currentState.billSplit.totalAmount,
+            note = currentState.billSplit.note
+        )
+    }
+
+    /**
+     * Generate message for email recipients only (Email All)
+     */
+    fun generateEmailOnlyMessage(): String {
+        val currentState = _state.value
+        val emailParticipants = currentState.billSplit.participants.filter {
+            it.contactMethod == ContactMethod.EMAIL
+        }
+        return generateMessageUseCase.generateCombinedMessage(
+            participants = emailParticipants,
+            paymentDetails = currentState.billSplit.paymentDetails,
+            currency = currentState.billSplit.currency,
+            totalAmount = currentState.billSplit.totalAmount,
+            note = currentState.billSplit.note
+        )
+    }
 }
